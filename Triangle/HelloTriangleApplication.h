@@ -8,6 +8,7 @@
 #include <GLFW/glfw3.h>
 
 #include "../Queue/QueueFamilyIndices.h"
+#include "../SwapChain/SwapChainSupportDetails.h"
 
 class HelloTriangleApplication
 {
@@ -57,6 +58,7 @@ private:
     bool are_validation_layers_supported();
 
     bool are_device_extensions_supported(const VkPhysicalDevice device);
+    SwapChainSupportDetails get_swap_chain_support_details(VkPhysicalDevice device);
     int rate_device(VkPhysicalDevice device);
     void select_physical_device();
 

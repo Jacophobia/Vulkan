@@ -256,6 +256,33 @@ bool HelloTriangleApplication::are_device_extensions_supported(const VkPhysicalD
     return required_extensions.empty();
 }
 
+SwapChainSupportDetails HelloTriangleApplication::get_swap_chain_support_details(VkPhysicalDevice device)
+{
+    SwapChainSupportDetails details;
+
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface_, &details.capabilities);
+
+    uint32_t format_count = 0;
+    vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface_, &format_count, nullptr);
+
+    if (format_count != 0)
+    {
+        details.formats.resize(format_count);
+        vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface_, &format_count, details.formats.data());
+    }
+
+    uint32_t present_mode_count = 0;
+    vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface_, &present_mode_count, nullptr);
+
+    if (present_mode_count != 0)
+    {
+        details.present_modes.resize(present_mode_count);
+        vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface_, &present_mode_count, details.present_modes.data());
+    }
+
+    return details;
+}
+
 int HelloTriangleApplication::rate_device(const VkPhysicalDevice device)
 {
     VkPhysicalDeviceProperties device_properties;
@@ -268,20 +295,22 @@ int HelloTriangleApplication::rate_device(const VkPhysicalDevice device)
     {
         return 0;
     }
+    
+    auto swap_chain_details = get_swap_chain_support_details(device);
+    if (!swap_chain_details.is_complete())
+    {
+        return 0;
+    }
 
     if (!device_features.geometryShader)
     {
         return 0;
     }
 
-    auto indices = find_queue_families(device);
-
-    if (!indices.graphics_family.has_value())
+    if (auto indices = find_queue_families(device); !indices.is_complete())
     {
         return 0;
     }
-
-    auto device_extensions_supported = are_device_extensions_supported(device);
 
     int score = 0;
     
