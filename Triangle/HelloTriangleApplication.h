@@ -4,6 +4,7 @@
 // following directive which tells glfw to do it
 #define GLFW_INCLUDE_VULKAN
 
+#include <string>
 #include <vector>
 #include <GLFW/glfw3.h>
 
@@ -78,6 +79,11 @@ private:
     void create_swap_chain();
 
     void create_image_views();
+
+    static std::vector<char> read_file(const std::string& filename);
+    VkShaderModule create_shader_module(const std::vector<char>& code);
+    
+    void create_graphics_pipeline();
 
     void main_loop();
     void clean_up();

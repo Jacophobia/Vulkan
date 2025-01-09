@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <vector>
 #include <format>
+#include <fstream>
 #include <set>
 
 #include "../Logging/Logging.h"
@@ -47,6 +48,7 @@ void HelloTriangleApplication::init_vulkan()
     create_logical_device();
     create_swap_chain();
     create_image_views();
+    create_graphics_pipeline();
 }
 
 void HelloTriangleApplication::create_instance()
@@ -618,6 +620,54 @@ void HelloTriangleApplication::create_image_views()
             throw std::runtime_error("Error: unable to create image view.");
         }
     }
+}
+
+std::vector<char> HelloTriangleApplication::read_file(const std::string &filename)
+{
+    std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+    if (!file.is_open())
+    {
+        throw std::runtime_error("Error: unable to open file " + filename);
+    }
+
+    const size_t file_size = file.tellg();
+    std::vector<char> buffer(file_size);
+    file.seekg(0);
+    file.read(buffer.data(), file_size);
+    file.close();
+
+    return buffer;
+}
+
+VkShaderModule HelloTriangleApplication::create_shader_module(const std::vector<char> &code)
+{
+    VkShaderModuleCreateInfo create_info{};
+    create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    create_info.codeSize = code.size();
+    create_info.pCode = reinterpret_cast<const uint32_t *>(code.data()); // TODO: learn more about why we do this
+
+    VkShaderModule shader_module;
+    if (vkCreateShaderModule(device_, &create_info, nullptr, &shader_module) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Error: unable to create shader module.");
+    }
+
+    return shader_module;
+}
+
+void HelloTriangleApplication::create_graphics_pipeline()
+{
+    auto vert_shader_code = read_file("Shaders/Vertex/vert.spv");
+    auto frag_shader_code = read_file("Shaders/Fragment/frag.spv");
+
+    auto vert_shader_module = create_shader_module(vert_shader_code);
+    auto frag_shader_module = create_shader_module(frag_shader_code);
+
+    
+
+    vkDestroyShaderModule(device_, vert_shader_module, nullptr);
+    vkDestroyShaderModule(device_, frag_shader_module, nullptr);
 }
 
 void HelloTriangleApplication::main_loop()
