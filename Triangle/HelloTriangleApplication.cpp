@@ -521,11 +521,11 @@ VkExtent2D HelloTriangleApplication::select_swap_extent(const VkSurfaceCapabilit
 
 void HelloTriangleApplication::create_swap_chain()
 {
-    auto swap_chain_details = get_swap_chain_support_details(physical_device_);
+    const auto swap_chain_details = get_swap_chain_support_details(physical_device_);
 
-    auto surface_format = select_swap_surface_format(swap_chain_details.formats);
-    auto present_mode = select_swap_present_mode(swap_chain_details.present_modes);
-    auto extent = select_swap_extent(swap_chain_details.capabilities);
+    const auto surface_format = select_swap_surface_format(swap_chain_details.formats);
+    const auto present_mode = select_swap_present_mode(swap_chain_details.present_modes);
+    const auto extent = select_swap_extent(swap_chain_details.capabilities);
 
     uint32_t image_count = swap_chain_details.capabilities.minImageCount + 1;
 
@@ -582,6 +582,13 @@ void HelloTriangleApplication::create_swap_chain()
     {
         throw std::runtime_error("Error: unable to create swap chain.");
     }
+
+    vkGetSwapchainImagesKHR(device_, swap_chain_, &image_count, nullptr);
+    swap_chain_images_.resize(image_count);
+    vkGetSwapchainImagesKHR(device_, swap_chain_, &image_count, swap_chain_images_.data());
+
+    swap_chain_image_format_ = surface_format.format;
+    swap_chain_extent_ = extent;
 }
 
 void HelloTriangleApplication::main_loop()

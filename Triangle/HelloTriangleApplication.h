@@ -46,6 +46,9 @@ private:
     VkQueue present_queue_; // implicitly destroyed
     VkSurfaceKHR surface_;
     VkSwapchainKHR swap_chain_;
+    std::vector<VkImage> swap_chain_images_;
+    VkFormat swap_chain_image_format_;
+    VkExtent2D swap_chain_extent_;
     
     void init_window();
 
