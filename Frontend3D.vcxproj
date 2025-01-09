@@ -166,10 +166,12 @@
   <ItemGroup>
     <ClCompile Include="Frontend3D.cpp" />
     <ClCompile Include="Logging\Logging.cpp" />
+    <ClCompile Include="Queue\QueueFamilyIndices.cpp" />
     <ClCompile Include="Triangle\HelloTriangleApplication.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Logging\Logging.h" />
+    <ClInclude Include="Queue\QueueFamilyIndices.h" />
     <ClInclude Include="Triangle\HelloTriangleApplication.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

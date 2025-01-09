@@ -1,13 +1,16 @@
-﻿#include "HelloTriangleApplication.h"
+﻿// ReSharper disable CppMemberFunctionMayBeConst
+// ReSharper disable CppUseStructuredBinding
+#include "HelloTriangleApplication.h"
 
 #include <stdexcept>
 #include <vector>
 #include <format>
+#include <set>
 
 #include "../Logging/Logging.h"
 
 HelloTriangleApplication::HelloTriangleApplication()
-    : window_(nullptr), instance_(), debug_messenger_() {}
+    : window_(nullptr), instance_(), debug_messenger_(), device_(), graphics_queue_() {}
 
 HelloTriangleApplication::~HelloTriangleApplication() = default;
 
@@ -36,7 +39,9 @@ void HelloTriangleApplication::init_vulkan()
 {
     create_instance();
     set_up_debug_messenger();
+    create_surface();
     select_physical_device();
+    create_logical_device();
 }
 
 void HelloTriangleApplication::create_instance()
@@ -233,6 +238,24 @@ bool HelloTriangleApplication::are_validation_layers_supported()
     return true;
 }
 
+bool HelloTriangleApplication::are_device_extensions_supported(const VkPhysicalDevice device)
+{
+    uint32_t extension_count = 0;
+    vkEnumerateDeviceExtensionProperties(device, nullptr, &extension_count, nullptr);
+
+    std::vector<VkExtensionProperties> available_extensions(extension_count);
+    vkEnumerateDeviceExtensionProperties(device, nullptr, &extension_count, available_extensions.data());
+
+    std::set<std::string> required_extensions(device_extensions_.begin(), device_extensions_.end());
+
+    for (const auto& extension : available_extensions)
+    {
+        required_extensions.erase(extension.extensionName);
+    }
+
+    return required_extensions.empty();
+}
+
 int HelloTriangleApplication::rate_device(const VkPhysicalDevice device)
 {
     VkPhysicalDeviceProperties device_properties;
@@ -241,10 +264,24 @@ int HelloTriangleApplication::rate_device(const VkPhysicalDevice device)
     VkPhysicalDeviceFeatures device_features;
     vkGetPhysicalDeviceFeatures(device, &device_features);
 
+    if (!are_device_extensions_supported(device))
+    {
+        return 0;
+    }
+
     if (!device_features.geometryShader)
     {
         return 0;
     }
+
+    auto indices = find_queue_families(device);
+
+    if (!indices.graphics_family.has_value())
+    {
+        return 0;
+    }
+
+    auto device_extensions_supported = are_device_extensions_supported(device);
 
     int score = 0;
     
@@ -289,6 +326,112 @@ void HelloTriangleApplication::select_physical_device()
     }
 }
 
+QueueFamilyIndices HelloTriangleApplication::find_queue_families(VkPhysicalDevice device)
+{
+    QueueFamilyIndices indices;
+
+    uint32_t queue_family_count = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, nullptr);
+
+    std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, queue_families.data());
+
+    int i = 0;
+    for (const auto& queue_family : queue_families)
+    {
+        bool graphics_support = false;
+        
+        if (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+        {
+            indices.graphics_family = i;
+            graphics_support = true;
+        }
+
+        VkBool32 present_support = false;
+
+        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface_, &present_support);
+
+        if (present_support)
+        {
+            indices.present_family = i;
+        }
+
+        if (graphics_support && present_support)
+        {
+            return indices;
+        }
+
+        i++;
+    }
+
+    return indices;
+}
+
+void HelloTriangleApplication::create_logical_device()
+{
+    const auto indices = find_queue_families(physical_device_);
+    
+    if (!indices.graphics_family.has_value() || !indices.present_family.has_value())
+    {
+        throw std::runtime_error("Error: queue family not found");
+    }
+
+    std::set queue_families =
+    {
+        indices.graphics_family.value(),
+        indices.present_family.value(),
+    };
+
+    std::vector<VkDeviceQueueCreateInfo> queue_create_infos;
+    for (auto queue_family : queue_families)
+    {
+        VkDeviceQueueCreateInfo queue_create_info{};
+        queue_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queue_create_info.queueFamilyIndex = queue_family;
+        queue_create_info.queueCount = 1;
+
+        float queue_priority = 1.0f;
+        queue_create_info.pQueuePriorities = &queue_priority;
+        queue_create_infos.push_back(queue_create_info);
+    }
+
+    VkPhysicalDeviceFeatures device_features{};
+
+    VkDeviceCreateInfo create_info{};
+    create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+    create_info.queueCreateInfoCount = static_cast<uint32_t>(queue_create_infos.size());
+    create_info.pQueueCreateInfos = queue_create_infos.data();
+    create_info.pEnabledFeatures = &device_features;
+    create_info.enabledExtensionCount = static_cast<uint32_t>(device_extensions_.size());
+    create_info.ppEnabledExtensionNames = device_extensions_.data();
+
+    if (enable_validation_layers_)
+    {
+        create_info.enabledLayerCount = static_cast<uint32_t>(validation_layers_.size());
+        create_info.ppEnabledLayerNames = validation_layers_.data();
+    }
+    else
+    {
+        create_info.enabledLayerCount = 0;
+    }
+
+    if (vkCreateDevice(physical_device_, &create_info, nullptr, &device_) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Error: unable to create logical device.");
+    }
+
+    vkGetDeviceQueue(device_, indices.graphics_family.value(), 0, &graphics_queue_);
+    vkGetDeviceQueue(device_, indices.present_family.value(), 0, &present_queue_);
+}
+
+void HelloTriangleApplication::create_surface()
+{
+    if (glfwCreateWindowSurface(instance_, window_, nullptr, &surface_) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Error: unable to create surface.");
+    }
+}
+
 void HelloTriangleApplication::main_loop()
 {
     while (!glfwWindowShouldClose(window_))
@@ -299,10 +442,14 @@ void HelloTriangleApplication::main_loop()
 
 void HelloTriangleApplication::clean_up()
 {
+    vkDestroyDevice(device_, nullptr);
+    
     if (enable_validation_layers_)
     {
         destroy_debug_utils_messenger(instance_, debug_messenger_, nullptr);
     }
+    
+    vkDestroySurfaceKHR(instance_, surface_, nullptr);
     
     vkDestroyInstance(instance_, nullptr);
     
