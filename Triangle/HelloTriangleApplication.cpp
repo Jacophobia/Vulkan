@@ -1,7 +1,9 @@
 ﻿// ReSharper disable CppMemberFunctionMayBeConst
 // ReSharper disable CppUseStructuredBinding
+
 #include "HelloTriangleApplication.h"
 
+#include <algorithm>
 #include <stdexcept>
 #include <vector>
 #include <format>
@@ -9,8 +11,9 @@
 
 #include "../Logging/Logging.h"
 
-HelloTriangleApplication::HelloTriangleApplication()
-    : window_(nullptr), instance_(), debug_messenger_(), device_(), graphics_queue_() {}
+HelloTriangleApplication::HelloTriangleApplication() :
+    window_(nullptr), instance_(), debug_messenger_(), device_(),
+    graphics_queue_(), present_queue_(), surface_() {}
 
 HelloTriangleApplication::~HelloTriangleApplication() = default;
 
@@ -42,6 +45,7 @@ void HelloTriangleApplication::init_vulkan()
     create_surface();
     select_physical_device();
     create_logical_device();
+    create_swap_chain();
 }
 
 void HelloTriangleApplication::create_instance()
@@ -461,6 +465,125 @@ void HelloTriangleApplication::create_surface()
     }
 }
 
+VkSurfaceFormatKHR HelloTriangleApplication::select_swap_surface_format(const std::vector<VkSurfaceFormatKHR> &available_formats)
+{
+    if (available_formats.empty())
+    {
+        throw std::runtime_error("Error: no available surface formats.");
+    }
+    
+    for (const auto& available_format : available_formats)
+    {
+        if (available_format.format == VK_FORMAT_B8G8R8A8_SRGB && available_format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+        {
+            return available_format;
+        }
+    }
+
+    return available_formats[0];
+}
+
+VkPresentModeKHR HelloTriangleApplication::select_swap_present_mode(const std::vector<VkPresentModeKHR>& available_present_modes)
+{
+    for (const auto& available_present_mode : available_present_modes)
+    {
+        if (available_present_mode == VK_PRESENT_MODE_MAILBOX_KHR)
+        {
+            return available_present_mode;
+        }
+    }
+
+    return VK_PRESENT_MODE_FIFO_KHR;
+}
+
+VkExtent2D HelloTriangleApplication::select_swap_extent(const VkSurfaceCapabilitiesKHR &capabilities)
+{
+    if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
+    {
+        return capabilities.currentExtent;
+    }
+
+    int width, height;
+
+    glfwGetFramebufferSize(window_, &width, &height);
+
+    VkExtent2D actual_extent =
+    {
+        static_cast<uint32_t>(width),
+        static_cast<uint32_t>(height),
+    };
+
+    actual_extent.width = std::clamp(actual_extent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+    actual_extent.height = std::clamp(actual_extent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+
+    return actual_extent;
+}
+
+void HelloTriangleApplication::create_swap_chain()
+{
+    auto swap_chain_details = get_swap_chain_support_details(physical_device_);
+
+    auto surface_format = select_swap_surface_format(swap_chain_details.formats);
+    auto present_mode = select_swap_present_mode(swap_chain_details.present_modes);
+    auto extent = select_swap_extent(swap_chain_details.capabilities);
+
+    uint32_t image_count = swap_chain_details.capabilities.minImageCount + 1;
+
+    if (swap_chain_details.capabilities.maxImageCount > 0 && image_count > swap_chain_details.capabilities.maxImageCount)
+    {
+        image_count = swap_chain_details.capabilities.maxImageCount;
+    }
+
+    VkSwapchainCreateInfoKHR create_info{};
+    create_info.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    create_info.surface = surface_;
+    create_info.minImageCount = image_count;
+    create_info.imageFormat = surface_format.format;
+    create_info.imageColorSpace = surface_format.colorSpace;
+    create_info.imageExtent = extent;
+    create_info.imageArrayLayers = 1;
+    create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+    const auto indices = find_queue_families(physical_device_);
+
+    if (!indices.graphics_family.has_value() || !indices.present_family.has_value())
+    {
+        throw std::runtime_error("Error: queue family unavailable.");
+    }
+
+    if (indices.graphics_family != indices.present_family)
+    {
+        const uint32_t queue_family_indices[] =
+        {
+            indices.graphics_family.value(),
+            indices.present_family.value(),
+        };
+        
+        create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+        create_info.queueFamilyIndexCount = 2;
+        create_info.pQueueFamilyIndices = queue_family_indices;
+    }
+    else
+    {
+        create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        create_info.queueFamilyIndexCount = 0;
+        create_info.pQueueFamilyIndices = nullptr;
+    }
+
+    create_info.preTransform = swap_chain_details.capabilities.currentTransform;
+    create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+
+    create_info.presentMode = present_mode;
+    create_info.clipped = VK_TRUE;
+
+    create_info.oldSwapchain = VK_NULL_HANDLE;
+
+    if (vkCreateSwapchainKHR(device_, &create_info, nullptr, &swap_chain_) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Error: unable to create swap chain.");
+    }
+}
+
 void HelloTriangleApplication::main_loop()
 {
     while (!glfwWindowShouldClose(window_))
@@ -471,6 +594,8 @@ void HelloTriangleApplication::main_loop()
 
 void HelloTriangleApplication::clean_up()
 {
+    vkDestroySwapchainKHR(device_, swap_chain_, nullptr);
+    
     vkDestroyDevice(device_, nullptr);
     
     if (enable_validation_layers_)

@@ -45,6 +45,7 @@ private:
     VkQueue graphics_queue_; // implicitly destroyed
     VkQueue present_queue_; // implicitly destroyed
     VkSurfaceKHR surface_;
+    VkSwapchainKHR swap_chain_;
     
     void init_window();
 
@@ -66,7 +67,12 @@ private:
     void create_logical_device();
 
     void create_surface();
-    
+
+    VkSurfaceFormatKHR select_swap_surface_format(const std::vector<VkSurfaceFormatKHR>& available_formats);
+    VkPresentModeKHR select_swap_present_mode(const std::vector<VkPresentModeKHR> &available_present_modes);
+    VkExtent2D select_swap_extent(const VkSurfaceCapabilitiesKHR& capabilities);
+    void create_swap_chain();
+
     void main_loop();
     void clean_up();
 };
