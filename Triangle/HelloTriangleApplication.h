@@ -51,6 +51,7 @@ private:
     VkFormat swap_chain_image_format_;
     VkExtent2D swap_chain_extent_;
     std::vector<VkImageView> swap_chain_image_views_;
+    VkPipelineLayout pipeline_layout_;
     
     void init_window();
 
