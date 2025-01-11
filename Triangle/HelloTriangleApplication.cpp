@@ -51,6 +51,7 @@ void HelloTriangleApplication::init_vulkan()
     create_render_pass();
     create_graphics_pipeline();
     create_frame_buffers();
+    create_command_pool();
 }
 
 void HelloTriangleApplication::create_instance()
@@ -875,8 +876,28 @@ void HelloTriangleApplication::create_frame_buffers()
 
         if (vkCreateFramebuffer(device_, &framebuffer_create_info, nullptr, &swap_chain_framebuffers_[i]) != VK_SUCCESS)
         {
-            throw std::runtime_error("Error: unable to create framebuffer");
+            throw std::runtime_error("Error: unable to create framebuffer.");
         }
+    }
+}
+
+void HelloTriangleApplication::create_command_pool()
+{
+    auto queue_family_indices = find_queue_families(physical_device_);
+
+    if (!queue_family_indices.graphics_family.has_value())
+    {
+        throw std::runtime_error("Error: graphics family not found.");
+    }
+
+    VkCommandPoolCreateInfo pool_create_info{};
+    pool_create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    pool_create_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    pool_create_info.queueFamilyIndex = queue_family_indices.graphics_family.value();
+
+    if (vkCreateCommandPool(device_, &pool_create_info, nullptr, &command_pool_) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Error: unable to create command pool."); 
     }
 }
 
@@ -890,6 +911,8 @@ void HelloTriangleApplication::main_loop()
 
 void HelloTriangleApplication::clean_up()
 {
+    vkDestroyCommandPool(device_, command_pool_, nullptr);
+    
     for (const auto framebuffer : swap_chain_framebuffers_)
     {
         vkDestroyFramebuffer(device_, framebuffer, nullptr);
