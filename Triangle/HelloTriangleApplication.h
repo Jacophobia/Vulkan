@@ -99,6 +99,8 @@ private:
 
     void create_command_buffer();
 
+    void record_command_buffer(VkCommandBuffer command_buffer, uint32_t image_index);
+
     void main_loop();
     void clean_up();
 };
