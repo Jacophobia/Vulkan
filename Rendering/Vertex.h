@@ -14,9 +14,13 @@ struct Vertex
     static std::array<VkVertexInputAttributeDescription, 2> get_attribute_descriptions();
 };
 
-const std::vector<Vertex> test_triangle =
-{
-    {{0.0f, -0.5f}, {1.0f, 1.0f, 1.0f}},
-    {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-    {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+const std::vector<Vertex> test_shape = {
+    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+    {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+    {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+};
+
+const std::vector<uint16_t> test_shape_indices = {
+    0, 1, 2, 2, 3, 0
 };

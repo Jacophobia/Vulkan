@@ -64,8 +64,14 @@ private:
     std::vector<VkFramebuffer> swap_chain_framebuffers_;
     VkCommandPool command_pool_;
     VkCommandPool transfer_command_pool_;
+
+    
+    // You now know how to save memory by reusing vertices with index buffers. This will become especially important in a future chapter where we're going to load complex 3D models.
+    // The previous chapter already mentioned that you should allocate multiple resources like buffers from a single memory allocation, but in fact you should go a step further. Driver developers recommend that you also store multiple buffers, like the vertex and index buffer, into a single VkBuffer and use offsets in commands like vkCmdBindVertexBuffers. The advantage is that your data is more cache friendly in that case, because it's closer together. It is even possible to reuse the same chunk of memory for multiple resources if they are not used during the same render operations, provided that their data is refreshed, of course. This is known as aliasing and some Vulkan functions have explicit flags to specify that you want to do this
     VkBuffer vertex_buffer_;
     VkDeviceMemory vertex_buffer_memory_;
+    VkBuffer index_buffer_;
+    VkDeviceMemory index_buffer_memory_;
 
     // per-flight
     std::vector<VkCommandBuffer> command_buffers_;
@@ -116,12 +122,13 @@ private:
 
     uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties);
 
-    void create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory
-                       &buffer_memory);
+    void create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &buffer_memory);
     
     void copy_buffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size);
 
     void create_vertex_buffer();
+
+    void create_index_buffer();
 
     void create_command_buffers();
 
