@@ -1,4 +1,5 @@
-﻿#pragma once
+﻿// ReSharper disable CppClangTidyCppcoreguidelinesAvoidConstOrRefDataMembers
+#pragma once
 
 // We do not need to include vulkan ourselves as long as we have the
 // following directive which tells glfw to do it
@@ -37,6 +38,9 @@ private:
 #else
     const bool enable_validation_layers_ = true;
 #endif
+
+    const size_t max_frames_in_flight_ = 2;
+    uint32_t current_frame_ = 0;
     
     GLFWwindow* window_;
     VkInstance instance_;
@@ -56,12 +60,12 @@ private:
     VkPipeline graphics_pipeline_;
     std::vector<VkFramebuffer> swap_chain_framebuffers_;
     VkCommandPool command_pool_;
-    VkCommandBuffer command_buffer_;
 
-    // synchronization
-    VkSemaphore image_available_semaphore_;
-    VkSemaphore render_finished_semaphore_;
-    VkFence in_flight_fence_;
+    // per-flight
+    std::vector<VkCommandBuffer> command_buffers_;
+    std::vector<VkSemaphore> image_available_semaphores_;
+    std::vector<VkSemaphore> render_finished_semaphores_;
+    std::vector<VkFence> in_flight_fences_;
     
     void init_window();
 
@@ -102,7 +106,7 @@ private:
 
     void create_command_pool();
 
-    void create_command_buffer();
+    void create_command_buffers();
 
     void create_sync_objects();
 
