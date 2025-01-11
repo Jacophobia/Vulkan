@@ -50,6 +50,7 @@ void HelloTriangleApplication::init_vulkan()
     create_image_views();
     create_render_pass();
     create_graphics_pipeline();
+    create_frame_buffers();
 }
 
 void HelloTriangleApplication::create_instance()
@@ -820,7 +821,7 @@ void HelloTriangleApplication::create_graphics_pipeline()
     pipeline_layout_create_info.pushConstantRangeCount = 0;
     pipeline_layout_create_info.pPushConstantRanges = nullptr;
 
-    if (!vkCreatePipelineLayout(device_, &pipeline_layout_create_info, nullptr, &pipeline_layout_))
+    if (vkCreatePipelineLayout(device_, &pipeline_layout_create_info, nullptr, &pipeline_layout_) != VK_SUCCESS)
     {
         throw std::runtime_error("Error: unable to create pipeline layout.");
     }
@@ -848,9 +849,35 @@ void HelloTriangleApplication::create_graphics_pipeline()
         throw std::runtime_error("Error: unable to create graphics pipeline");
     }
     
-    
     vkDestroyShaderModule(device_, vert_shader_module, nullptr);
     vkDestroyShaderModule(device_, frag_shader_module, nullptr);
+}
+
+void HelloTriangleApplication::create_frame_buffers()
+{
+    swap_chain_framebuffers_.resize(swap_chain_image_views_.size());
+
+    for (size_t i = 0; i < swap_chain_image_views_.size(); ++i)
+    {
+        VkImageView attachments[] =
+        {
+            swap_chain_image_views_[i],
+        };
+
+        VkFramebufferCreateInfo framebuffer_create_info{};
+        framebuffer_create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        framebuffer_create_info.renderPass = render_pass_;
+        framebuffer_create_info.attachmentCount = 1;
+        framebuffer_create_info.pAttachments = attachments;
+        framebuffer_create_info.width = swap_chain_extent_.width;
+        framebuffer_create_info.height = swap_chain_extent_.height;
+        framebuffer_create_info.layers = 1;
+
+        if (vkCreateFramebuffer(device_, &framebuffer_create_info, nullptr, &swap_chain_framebuffers_[i]) != VK_SUCCESS)
+        {
+            throw std::runtime_error("Error: unable to create framebuffer");
+        }
+    }
 }
 
 void HelloTriangleApplication::main_loop()
@@ -863,6 +890,11 @@ void HelloTriangleApplication::main_loop()
 
 void HelloTriangleApplication::clean_up()
 {
+    for (const auto framebuffer : swap_chain_framebuffers_)
+    {
+        vkDestroyFramebuffer(device_, framebuffer, nullptr);
+    }
+    
     vkDestroyPipeline(device_, graphics_pipeline_, nullptr);
     
     vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
