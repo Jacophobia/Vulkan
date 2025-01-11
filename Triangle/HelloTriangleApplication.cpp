@@ -71,7 +71,7 @@ void HelloTriangleApplication::init_vulkan()
     create_render_pass();
     create_graphics_pipeline();
     create_frame_buffers();
-    create_command_pool();
+    create_command_pools();
     create_vertex_buffer();
     create_command_buffers();
     create_sync_objects();
@@ -397,32 +397,50 @@ QueueFamilyIndices HelloTriangleApplication::find_queue_families(VkPhysicalDevic
 
     std::vector<VkQueueFamilyProperties> queue_families(queue_family_count);
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queue_family_count, queue_families.data());
-
+    
     int i = 0;
     for (const auto& queue_family : queue_families)
     {
         bool graphics_support = false;
-        
         if (queue_family.queueFlags & VK_QUEUE_GRAPHICS_BIT)
         {
-            indices.graphics_family = i;
             graphics_support = true;
         }
 
         VkBool32 present_support = false;
-
         vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface_, &present_support);
 
-        if (present_support)
+        bool transfer_support = false;
+        if (queue_family.queueFlags & VK_QUEUE_TRANSFER_BIT)
+        {
+            transfer_support = true;
+        }
+        
+        // if it supports graphics and present, set it to that
+        if (graphics_support && present_support)
+        {
+            indices.present_family = i;
+            indices.graphics_family = i;
+        }
+
+        // set graphics family (as long as it hasn't already been set)
+        if (graphics_support && !indices.graphics_family.has_value())
+        {
+            indices.graphics_family = i;
+        }
+
+        // set present family (as long as it hasn't already been set)
+        if (present_support && !indices.present_family.has_value())
         {
             indices.present_family = i;
         }
 
-        if (graphics_support && present_support)
+        // set transfer family (as long as it hasn't already been set)
+        if (transfer_support && !graphics_support && !indices.transfer_family.has_value())
         {
-            return indices;
+            indices.transfer_family = i;
         }
-
+        
         i++;
     }
 
@@ -433,7 +451,7 @@ void HelloTriangleApplication::create_logical_device()
 {
     const auto indices = find_queue_families(physical_device_);
     
-    if (!indices.graphics_family.has_value() || !indices.present_family.has_value())
+    if (!indices.graphics_family.has_value() || !indices.present_family.has_value() || !indices.transfer_family.has_value())
     {
         throw std::runtime_error("Error: queue family not found");
     }
@@ -442,6 +460,7 @@ void HelloTriangleApplication::create_logical_device()
     {
         indices.graphics_family.value(),
         indices.present_family.value(),
+        indices.transfer_family.value(),
     };
 
     std::vector<VkDeviceQueueCreateInfo> queue_create_infos;
@@ -484,6 +503,7 @@ void HelloTriangleApplication::create_logical_device()
 
     vkGetDeviceQueue(device_, indices.graphics_family.value(), 0, &graphics_queue_);
     vkGetDeviceQueue(device_, indices.present_family.value(), 0, &present_queue_);
+    vkGetDeviceQueue(device_, indices.transfer_family.value(), 0, &transfer_queue_);
 }
 
 void HelloTriangleApplication::create_surface()
@@ -599,29 +619,25 @@ void HelloTriangleApplication::create_swap_chain()
 
     const auto indices = find_queue_families(physical_device_);
 
-    if (!indices.graphics_family.has_value() || !indices.present_family.has_value())
+    if (!indices.graphics_family.has_value() || !indices.present_family.has_value() || !indices.transfer_family.has_value())
     {
         throw std::runtime_error("Error: queue family unavailable.");
     }
+    
+    std::vector queue_family_indices =
+    {
+        indices.graphics_family.value(),
+        indices.transfer_family.value(),
+    };
 
-    if (indices.graphics_family != indices.present_family)
+    if (indices.present_family.value() != indices.graphics_family.value())
     {
-        const uint32_t queue_family_indices[] =
-        {
-            indices.graphics_family.value(),
-            indices.present_family.value(),
-        };
-        
-        create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-        create_info.queueFamilyIndexCount = 2;
-        create_info.pQueueFamilyIndices = queue_family_indices;
+        queue_family_indices.push_back(indices.present_family.value());
     }
-    else
-    {
-        create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        create_info.queueFamilyIndexCount = 0;
-        create_info.pQueueFamilyIndices = nullptr;
-    }
+    
+    create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+    create_info.queueFamilyIndexCount = static_cast<uint32_t>(queue_family_indices.size());
+    create_info.pQueueFamilyIndices = queue_family_indices.data();
 
     create_info.preTransform = swap_chain_details.capabilities.currentTransform;
     create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
@@ -940,7 +956,7 @@ void HelloTriangleApplication::create_frame_buffers()
     }
 }
 
-void HelloTriangleApplication::create_command_pool()
+void HelloTriangleApplication::create_command_pools()
 {
     auto queue_family_indices = find_queue_families(physical_device_);
 
@@ -949,12 +965,27 @@ void HelloTriangleApplication::create_command_pool()
         throw std::runtime_error("Error: graphics family not found.");
     }
 
-    VkCommandPoolCreateInfo pool_create_info{};
-    pool_create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    pool_create_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    pool_create_info.queueFamilyIndex = queue_family_indices.graphics_family.value();
+    VkCommandPoolCreateInfo graphics_pool_create_info{};
+    graphics_pool_create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    graphics_pool_create_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    graphics_pool_create_info.queueFamilyIndex = queue_family_indices.graphics_family.value();
 
-    if (vkCreateCommandPool(device_, &pool_create_info, nullptr, &command_pool_) != VK_SUCCESS)
+    if (vkCreateCommandPool(device_, &graphics_pool_create_info, nullptr, &command_pool_) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Error: unable to create command pool."); 
+    }
+
+    if (!queue_family_indices.transfer_family.has_value())
+    {
+        throw std::runtime_error("Error: transfer family not found.");
+    }
+
+    VkCommandPoolCreateInfo transfer_pool_create_info{};
+    transfer_pool_create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    transfer_pool_create_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    transfer_pool_create_info.queueFamilyIndex = queue_family_indices.transfer_family.value();
+
+    if (vkCreateCommandPool(device_, &transfer_pool_create_info, nullptr, &transfer_command_pool_) != VK_SUCCESS)
     {
         throw std::runtime_error("Error: unable to create command pool."); 
     }
@@ -1212,6 +1243,8 @@ void HelloTriangleApplication::clean_up()
     }
     
     vkDestroyCommandPool(device_, command_pool_, nullptr);
+
+    vkDestroyCommandPool(device_, transfer_command_pool_, nullptr);
     
     vkDestroyPipeline(device_, graphics_pipeline_, nullptr);
     

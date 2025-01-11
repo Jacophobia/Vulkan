@@ -51,6 +51,7 @@ private:
     VkDevice device_;
     VkQueue graphics_queue_; // implicitly destroyed
     VkQueue present_queue_; // implicitly destroyed
+    VkQueue transfer_queue_; // implicitly destroyed
     VkSurfaceKHR surface_;
     VkSwapchainKHR swap_chain_;
     std::vector<VkImage> swap_chain_images_;
@@ -62,6 +63,7 @@ private:
     VkPipeline graphics_pipeline_;
     std::vector<VkFramebuffer> swap_chain_framebuffers_;
     VkCommandPool command_pool_;
+    VkCommandPool transfer_command_pool_;
     VkBuffer vertex_buffer_;
     VkDeviceMemory vertex_buffer_memory_;
 
@@ -110,7 +112,7 @@ private:
 
     void create_frame_buffers();
 
-    void create_command_pool();
+    void create_command_pools();
 
     uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties);
 
