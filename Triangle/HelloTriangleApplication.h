@@ -57,6 +57,11 @@ private:
     std::vector<VkFramebuffer> swap_chain_framebuffers_;
     VkCommandPool command_pool_;
     VkCommandBuffer command_buffer_;
+
+    // synchronization
+    VkSemaphore image_available_semaphore_;
+    VkSemaphore render_finished_semaphore_;
+    VkFence in_flight_fence_;
     
     void init_window();
 
@@ -99,8 +104,11 @@ private:
 
     void create_command_buffer();
 
+    void create_sync_objects();
+
     void record_command_buffer(VkCommandBuffer command_buffer, uint32_t image_index);
 
     void main_loop();
+    void draw_frame();
     void clean_up();
 };
