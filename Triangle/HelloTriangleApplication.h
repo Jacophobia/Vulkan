@@ -68,6 +68,9 @@ private:
     std::vector<VkFramebuffer> swap_chain_framebuffers_;
     VkCommandPool command_pool_;
     VkCommandPool transfer_command_pool_;
+    VkDescriptorPool descriptor_pool_;
+    // implicitly destroyed when pool is destroyed
+    std::vector<VkDescriptorSet> descriptor_sets_; 
 
     // TODO: @Combine Buffers 
     VkBuffer vertex_buffer_;
@@ -139,6 +142,10 @@ private:
     void create_index_buffer();
 
     void create_uniform_buffers();
+
+    void create_descriptor_pool();
+    
+    void create_descriptor_sets();
 
     void create_command_buffers();
 

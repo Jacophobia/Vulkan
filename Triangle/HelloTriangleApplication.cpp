@@ -78,6 +78,8 @@ void HelloTriangleApplication::init_vulkan()
     create_vertex_buffer();
     create_index_buffer();
     create_uniform_buffers();
+    create_descriptor_pool();
+    create_descriptor_sets();
     create_command_buffers();
     create_sync_objects();
 }
@@ -877,7 +879,7 @@ void HelloTriangleApplication::create_graphics_pipeline()
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
     rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
-    rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
     rasterizer.depthBiasConstantFactor = 0.0f;
     rasterizer.depthBiasClamp = 0.0f;
@@ -1187,6 +1189,62 @@ void HelloTriangleApplication::create_uniform_buffers()
     }
 }
 
+void HelloTriangleApplication::create_descriptor_pool()
+{
+    VkDescriptorPoolSize pool_size{};
+    pool_size.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    pool_size.descriptorCount = static_cast<uint32_t>(max_frames_in_flight_);
+
+    VkDescriptorPoolCreateInfo pool_create_info{};
+    pool_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool_create_info.poolSizeCount = 1;
+    pool_create_info.pPoolSizes = &pool_size;
+    pool_create_info.maxSets = static_cast<uint32_t>(max_frames_in_flight_);
+
+    if (vkCreateDescriptorPool(device_, &pool_create_info, nullptr, &descriptor_pool_) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Error: unable to create descriptor pool.");
+    }
+}
+
+void HelloTriangleApplication::create_descriptor_sets()
+{
+    std::vector layouts(max_frames_in_flight_, descriptor_set_layout_);
+
+    VkDescriptorSetAllocateInfo descriptor_set_allocate_info{};
+    descriptor_set_allocate_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    descriptor_set_allocate_info.descriptorPool = descriptor_pool_;
+    descriptor_set_allocate_info.descriptorSetCount = static_cast<uint32_t>(max_frames_in_flight_);
+    descriptor_set_allocate_info.pSetLayouts = layouts.data();
+
+    descriptor_sets_.resize(max_frames_in_flight_);
+    if (vkAllocateDescriptorSets(device_, &descriptor_set_allocate_info, descriptor_sets_.data()) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Error: unable to allocate descriptor sets.");
+    }
+
+    for (size_t i = 0; i < max_frames_in_flight_; ++i)
+    {
+        VkDescriptorBufferInfo buffer_info{};
+        buffer_info.buffer = uniform_buffers_[i];
+        buffer_info.offset = 0;
+        buffer_info.range = sizeof(UniformBufferObject);
+
+        VkWriteDescriptorSet descriptor_write{};
+        descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptor_write.dstSet = descriptor_sets_[i];
+        descriptor_write.dstBinding = 0;
+        descriptor_write.dstArrayElement = 0;
+        descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptor_write.descriptorCount = 1;
+        descriptor_write.pBufferInfo = &buffer_info;
+        descriptor_write.pImageInfo = nullptr;
+        descriptor_write.pTexelBufferView = nullptr;
+
+        vkUpdateDescriptorSets(device_, 1, &descriptor_write, 0, nullptr);
+    }
+}
+
 void HelloTriangleApplication::create_command_buffers()
 {
     command_buffers_.resize(max_frames_in_flight_);
@@ -1284,6 +1342,8 @@ void HelloTriangleApplication::record_command_buffer(VkCommandBuffer command_buf
     vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers,offsets);
 
     vkCmdBindIndexBuffer(command_buffer, index_buffer_, 0, VK_INDEX_TYPE_UINT16);
+
+    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout_, 0, 1, &descriptor_sets_[current_frame_], 0, nullptr);
 
     vkCmdDrawIndexed(command_buffer, static_cast<uint32_t>(test_shape_indices.size()), 1, 0, 0, 0);
 
@@ -1403,6 +1463,8 @@ void HelloTriangleApplication::clean_up()
         vkDestroyBuffer(device_, uniform_buffers_[i], nullptr);
         vkFreeMemory(device_, uniform_buffers_memories_[i], nullptr);
     }
+
+    vkDestroyDescriptorPool(device_, descriptor_pool_, nullptr);
 
     vkDestroyDescriptorSetLayout(device_, descriptor_set_layout_, nullptr);
 
