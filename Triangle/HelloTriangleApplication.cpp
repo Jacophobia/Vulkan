@@ -11,6 +11,7 @@
 #include <fstream>
 #include <set>
 #include <chrono>
+#include <iostream>
 
 #include "../Logging/Logging.h"
 #include "../Rendering/UniformBufferObject.h"
@@ -1357,10 +1358,24 @@ void HelloTriangleApplication::record_command_buffer(VkCommandBuffer command_buf
 
 void HelloTriangleApplication::main_loop()
 {
+    uint32_t frame_counter = 0;
+    auto start_time = std::chrono::high_resolution_clock::now();
+    
     while (!glfwWindowShouldClose(window_))
     {
         glfwPollEvents();
         draw_frame();
+        
+        ++frame_counter;
+        
+        auto current_time = std::chrono::high_resolution_clock::now();
+        if (std::chrono::duration<float>(current_time - start_time).count() > 1.0f)
+        {
+            logging::info(std::format("FPS: {}", frame_counter));
+            
+            start_time = std::chrono::high_resolution_clock::now();
+            frame_counter = 0;
+        }
     }
 
     vkDeviceWaitIdle(device_);
@@ -1378,7 +1393,8 @@ void HelloTriangleApplication::draw_frame()
         recreate_swap_chain();
         return;
     }
-    else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+    
+    if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
     {
         throw std::runtime_error("Error: failed to acquire swap chain image.");
     }
