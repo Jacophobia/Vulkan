@@ -62,6 +62,8 @@ private:
     VkPipeline graphics_pipeline_;
     std::vector<VkFramebuffer> swap_chain_framebuffers_;
     VkCommandPool command_pool_;
+    VkBuffer vertex_buffer_;
+    VkDeviceMemory vertex_buffer_memory_;
 
     // per-flight
     std::vector<VkCommandBuffer> command_buffers_;
@@ -109,6 +111,10 @@ private:
     void create_frame_buffers();
 
     void create_command_pool();
+
+    uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties);
+
+    void create_vertex_buffer();
 
     void create_command_buffers();
 
