@@ -167,6 +167,7 @@
     <ClCompile Include="Frontend3D.cpp" />
     <ClCompile Include="Logging\Logging.cpp" />
     <ClCompile Include="Queue\QueueFamilyIndices.cpp" />
+    <ClCompile Include="Rendering\UniformBufferObject.cpp" />
     <ClCompile Include="Rendering\Vertex.cpp" />
     <ClCompile Include="SwapChain\SwapChainSupportDetails.cpp" />
     <ClCompile Include="Triangle\HelloTriangleApplication.cpp" />
@@ -174,6 +175,7 @@
   <ItemGroup>
     <ClInclude Include="Logging\Logging.h" />
     <ClInclude Include="Queue\QueueFamilyIndices.h" />
+    <ClInclude Include="Rendering\UniformBufferObject.h" />
     <ClInclude Include="Rendering\Vertex.h" />
     <ClInclude Include="SwapChain\SwapChainSupportDetails.h" />
     <ClInclude Include="Triangle\HelloTriangleApplication.h" />
@@ -182,6 +184,7 @@
     <Content Include="compile.bat" />
     <Content Include="Shaders\Fragment\shader.frag" />
     <Content Include="Shaders\Vertex\shader.vert" />
+    <Content Include="ToDo.md" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

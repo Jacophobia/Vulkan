@@ -10,8 +10,10 @@
 #include <format>
 #include <fstream>
 #include <set>
+#include <chrono>
 
 #include "../Logging/Logging.h"
+#include "../Rendering/UniformBufferObject.h"
 #include "../Rendering/Vertex.h"
 
 HelloTriangleApplication::HelloTriangleApplication() :
@@ -69,11 +71,13 @@ void HelloTriangleApplication::init_vulkan()
     create_swap_chain();
     create_image_views();
     create_render_pass();
+    create_descriptor_set_layout();
     create_graphics_pipeline();
     create_frame_buffers();
     create_command_pools();
     create_vertex_buffer();
     create_index_buffer();
+    create_uniform_buffers();
     create_command_buffers();
     create_sync_objects();
 }
@@ -770,9 +774,28 @@ void HelloTriangleApplication::create_render_pass()
     }
 }
 
-void create_pipeline_test()
+void HelloTriangleApplication::create_descriptor_set_layout()
 {
+    VkDescriptorSetLayoutBinding ubo_layout_binding{};
+    ubo_layout_binding.binding = 0;
+    ubo_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    // if an object has multiple transformations within it, this should
+    // be more than one (i.e. a skeletal mesh could use one for each
+    // bone)
+    // the one use here means the whole object will transform
+    ubo_layout_binding.descriptorCount = 1;
+    ubo_layout_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    ubo_layout_binding.pImmutableSamplers = nullptr;
     
+    VkDescriptorSetLayoutCreateInfo layout_create_info{};
+    layout_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layout_create_info.bindingCount = 1;
+    layout_create_info.pBindings = &ubo_layout_binding;
+
+    if (vkCreateDescriptorSetLayout(device_, &layout_create_info, nullptr, &descriptor_set_layout_) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Error: unable to create descriptor set layout");
+    }
 }
 
 void HelloTriangleApplication::create_graphics_pipeline()
@@ -893,8 +916,8 @@ void HelloTriangleApplication::create_graphics_pipeline()
 
     VkPipelineLayoutCreateInfo pipeline_layout_create_info{};
     pipeline_layout_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipeline_layout_create_info.setLayoutCount = 0;
-    pipeline_layout_create_info.pSetLayouts = nullptr;
+    pipeline_layout_create_info.setLayoutCount = 1;
+    pipeline_layout_create_info.pSetLayouts = &descriptor_set_layout_;
     pipeline_layout_create_info.pushConstantRangeCount = 0;
     pipeline_layout_create_info.pPushConstantRanges = nullptr;
 
@@ -1028,26 +1051,8 @@ void HelloTriangleApplication::create_buffer(VkDeviceSize size, VkBufferUsageFla
     allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocate_info.allocationSize = memory_requirements.size;
     allocate_info.memoryTypeIndex = find_memory_type(memory_requirements.memoryTypeBits, properties);
-
-    // TODO: create our own allocator that uses the offset stuff
-    /*
-     * It should be noted that in a real world application, you're not
-     * supposed to actually call vkAllocateMemory for every individual
-     * buffer. The maximum number of simultaneous memory allocations is
-     * limited by the maxMemoryAllocationCount physical device limit,
-     * which may be as low as 4096 even on high end hardware like an
-     * NVIDIA GTX 1080. The right way to allocate memory for a large
-     * number of objects at the same time is to create a custom allocator
-     * that splits up a single allocation among many different objects by
-     * using the offset parameters that we've seen in many functions.
-     *
-     * You can either implement such an allocator yourself, or use the
-     * VulkanMemoryAllocator library provided by the GPUOpen initiative.
-     * However, for this tutorial it's okay to use a separate allocation
-     * for every resource, because we won't come close to hitting any of
-     * these limits for now.
-     *
-     */
+    
+    // TODO: Custom Allocator
     if (vkAllocateMemory(device_, &allocate_info, nullptr, &buffer_memory) != VK_SUCCESS)
     {
         throw std::runtime_error("Error: unable to allocate vertex buffer memory");
@@ -1158,6 +1163,28 @@ void HelloTriangleApplication::create_index_buffer()
 
     vkDestroyBuffer(device_, staging_buffer, nullptr);
     vkFreeMemory(device_, staging_buffer_memory, nullptr);
+}
+
+void HelloTriangleApplication::create_uniform_buffers()
+{
+    VkDeviceSize buffer_size = sizeof(UniformBufferObject);
+
+    uniform_buffers_.resize(max_frames_in_flight_);
+    uniform_buffers_memories_.resize(max_frames_in_flight_);
+    uniform_buffers_mapped_.resize(max_frames_in_flight_);
+
+    for (size_t i = 0; i < max_frames_in_flight_; ++i)
+    {
+        create_buffer(
+            buffer_size,
+            VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            uniform_buffers_[i],
+            uniform_buffers_memories_[i]
+        );
+
+        vkMapMemory(device_, uniform_buffers_memories_[i], 0, buffer_size, 0, &uniform_buffers_mapped_[i]);
+    }
 }
 
 void HelloTriangleApplication::create_command_buffers()
@@ -1302,6 +1329,8 @@ void HelloTriangleApplication::draw_frame()
 
     record_command_buffer(command_buffers_[current_frame_], image_index);
 
+    update_uniform_buffer();
+
     VkSubmitInfo submit_info{};
     submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
@@ -1349,9 +1378,33 @@ void HelloTriangleApplication::draw_frame()
     current_frame_ = (current_frame_ + 1) % max_frames_in_flight_;
 }
 
+void HelloTriangleApplication::update_uniform_buffer()
+{
+    static auto start_time = std::chrono::high_resolution_clock::now();
+
+    auto current_time = std::chrono::high_resolution_clock::now();
+    float time = std::chrono::duration<float>(current_time - start_time).count();
+
+    UniformBufferObject ubo{};
+    ubo.model = rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.view = lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.proj = glm::perspective(glm::radians(45.0f), static_cast<float>(swap_chain_extent_.width) / static_cast<float>(swap_chain_extent_.height), 0.1f, 10.0f);
+    ubo.proj[1][1] *= -1;
+
+    memcpy(uniform_buffers_mapped_[current_frame_], &ubo, sizeof(ubo));
+}
+
 void HelloTriangleApplication::clean_up()
 {
     clean_up_swap_chain();
+
+    for (size_t i = 0; i < max_frames_in_flight_; ++i)
+    {
+        vkDestroyBuffer(device_, uniform_buffers_[i], nullptr);
+        vkFreeMemory(device_, uniform_buffers_memories_[i], nullptr);
+    }
+
+    vkDestroyDescriptorSetLayout(device_, descriptor_set_layout_, nullptr);
 
     vkDestroyBuffer(device_, index_buffer_, nullptr);
     vkFreeMemory(device_, index_buffer_memory_, nullptr);

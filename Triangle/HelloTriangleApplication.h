@@ -4,10 +4,13 @@
 // We do not need to include vulkan ourselves as long as we have the
 // following directive which tells glfw to do it
 #define GLFW_INCLUDE_VULKAN
+#define GLM_FORCE_RADIANS
 
 #include <string>
 #include <vector>
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include "../Queue/QueueFamilyIndices.h"
 #include "../SwapChain/SwapChainSupportDetails.h"
@@ -59,19 +62,22 @@ private:
     VkExtent2D swap_chain_extent_;
     std::vector<VkImageView> swap_chain_image_views_;
     VkRenderPass render_pass_;
+    VkDescriptorSetLayout descriptor_set_layout_;
     VkPipelineLayout pipeline_layout_;
     VkPipeline graphics_pipeline_;
     std::vector<VkFramebuffer> swap_chain_framebuffers_;
     VkCommandPool command_pool_;
     VkCommandPool transfer_command_pool_;
 
-    
-    // You now know how to save memory by reusing vertices with index buffers. This will become especially important in a future chapter where we're going to load complex 3D models.
-    // The previous chapter already mentioned that you should allocate multiple resources like buffers from a single memory allocation, but in fact you should go a step further. Driver developers recommend that you also store multiple buffers, like the vertex and index buffer, into a single VkBuffer and use offsets in commands like vkCmdBindVertexBuffers. The advantage is that your data is more cache friendly in that case, because it's closer together. It is even possible to reuse the same chunk of memory for multiple resources if they are not used during the same render operations, provided that their data is refreshed, of course. This is known as aliasing and some Vulkan functions have explicit flags to specify that you want to do this
+    // TODO: @Combine Buffers 
     VkBuffer vertex_buffer_;
     VkDeviceMemory vertex_buffer_memory_;
     VkBuffer index_buffer_;
     VkDeviceMemory index_buffer_memory_;
+
+    std::vector<VkBuffer> uniform_buffers_;
+    std::vector<VkDeviceMemory> uniform_buffers_memories_;
+    std::vector<void*> uniform_buffers_mapped_;
 
     // per-flight
     std::vector<VkCommandBuffer> command_buffers_;
@@ -113,6 +119,8 @@ private:
     VkShaderModule create_shader_module(const std::vector<char>& code);
 
     void create_render_pass();
+
+    void create_descriptor_set_layout();
     
     void create_graphics_pipeline();
 
@@ -130,6 +138,8 @@ private:
 
     void create_index_buffer();
 
+    void create_uniform_buffers();
+
     void create_command_buffers();
 
     void create_sync_objects();
@@ -137,7 +147,11 @@ private:
     void record_command_buffer(VkCommandBuffer command_buffer, uint32_t image_index);
 
     void main_loop();
+    
     void draw_frame();
+    
+    void update_uniform_buffer();
+    
     void clean_up();
 
     void clean_up_swap_chain();
