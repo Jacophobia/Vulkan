@@ -56,6 +56,7 @@ private:
     VkPipeline graphics_pipeline_;
     std::vector<VkFramebuffer> swap_chain_framebuffers_;
     VkCommandPool command_pool_;
+    VkCommandBuffer command_buffer_;
     
     void init_window();
 
@@ -95,6 +96,8 @@ private:
     void create_frame_buffers();
 
     void create_command_pool();
+
+    void create_command_buffer();
 
     void main_loop();
     void clean_up();
