@@ -15,6 +15,8 @@
 class HelloTriangleApplication
 {
 public:
+    bool frame_buffer_resized = false;
+    
     HelloTriangleApplication();
     ~HelloTriangleApplication();
     
@@ -66,7 +68,8 @@ private:
     std::vector<VkSemaphore> image_available_semaphores_;
     std::vector<VkSemaphore> render_finished_semaphores_;
     std::vector<VkFence> in_flight_fences_;
-    
+
+    static void frame_buffer_resize_callback(GLFWwindow* window, int width, int height);
     void init_window();
 
     /* Vulkan Initialization */
@@ -91,6 +94,7 @@ private:
     VkSurfaceFormatKHR select_swap_surface_format(const std::vector<VkSurfaceFormatKHR>& available_formats);
     VkPresentModeKHR select_swap_present_mode(const std::vector<VkPresentModeKHR> &available_present_modes);
     VkExtent2D select_swap_extent(const VkSurfaceCapabilitiesKHR& capabilities);
+    void recreate_swap_chain();
     void create_swap_chain();
 
     void create_image_views();
@@ -115,4 +119,6 @@ private:
     void main_loop();
     void draw_frame();
     void clean_up();
+
+    void clean_up_swap_chain();
 };
