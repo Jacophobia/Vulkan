@@ -982,7 +982,7 @@ void HelloTriangleApplication::create_command_pools()
 
     VkCommandPoolCreateInfo transfer_pool_create_info{};
     transfer_pool_create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    transfer_pool_create_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    transfer_pool_create_info.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
     transfer_pool_create_info.queueFamilyIndex = queue_family_indices.transfer_family.value();
 
     if (vkCreateCommandPool(device_, &transfer_pool_create_info, nullptr, &transfer_command_pool_) != VK_SUCCESS)
@@ -1007,38 +1007,122 @@ uint32_t HelloTriangleApplication::find_memory_type(uint32_t type_filter, VkMemo
     throw std::runtime_error("Error: unable to find suitable memory type.");
 }
 
-void HelloTriangleApplication::create_vertex_buffer()
+void HelloTriangleApplication::create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& buffer_memory)
 {
     VkBufferCreateInfo buffer_create_info{};
     buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    buffer_create_info.size = sizeof(test_triangle[0]) * test_triangle.size();
-    buffer_create_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    buffer_create_info.size = size;
+    buffer_create_info.usage = usage;
     buffer_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    if (vkCreateBuffer(device_, &buffer_create_info, nullptr, &vertex_buffer_) != VK_SUCCESS)
+    if (vkCreateBuffer(device_, &buffer_create_info, nullptr, &buffer) != VK_SUCCESS)
     {
         throw std::runtime_error("Error: unable to create vertex buffer.");
     }
 
     VkMemoryRequirements memory_requirements;
-    vkGetBufferMemoryRequirements(device_, vertex_buffer_, &memory_requirements);
+    vkGetBufferMemoryRequirements(device_, buffer, &memory_requirements);
 
     VkMemoryAllocateInfo allocate_info{};
     allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocate_info.allocationSize = memory_requirements.size;
-    allocate_info.memoryTypeIndex = find_memory_type(memory_requirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+    allocate_info.memoryTypeIndex = find_memory_type(memory_requirements.memoryTypeBits, properties);
 
-    if (vkAllocateMemory(device_, &allocate_info, nullptr, &vertex_buffer_memory_) != VK_SUCCESS)
+    // TODO: create our own allocator that uses the offset stuff
+    /*
+     * It should be noted that in a real world application, you're not
+     * supposed to actually call vkAllocateMemory for every individual
+     * buffer. The maximum number of simultaneous memory allocations is
+     * limited by the maxMemoryAllocationCount physical device limit,
+     * which may be as low as 4096 even on high end hardware like an
+     * NVIDIA GTX 1080. The right way to allocate memory for a large
+     * number of objects at the same time is to create a custom allocator
+     * that splits up a single allocation among many different objects by
+     * using the offset parameters that we've seen in many functions.
+     *
+     * You can either implement such an allocator yourself, or use the
+     * VulkanMemoryAllocator library provided by the GPUOpen initiative.
+     * However, for this tutorial it's okay to use a separate allocation
+     * for every resource, because we won't come close to hitting any of
+     * these limits for now.
+     *
+     */
+    if (vkAllocateMemory(device_, &allocate_info, nullptr, &buffer_memory) != VK_SUCCESS)
     {
         throw std::runtime_error("Error: unable to allocate vertex buffer memory");
     }
 
-    vkBindBufferMemory(device_, vertex_buffer_, vertex_buffer_memory_, 0);
+    vkBindBufferMemory(device_, buffer, buffer_memory, 0);
+}
+
+void HelloTriangleApplication::copy_buffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size)
+{
+    VkCommandBufferAllocateInfo allocate_info{};
+    allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocate_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocate_info.commandPool = transfer_command_pool_;
+    allocate_info.commandBufferCount = 1;
+
+    VkCommandBuffer command_buffer;
+    vkAllocateCommandBuffers(device_, &allocate_info, &command_buffer);
+
+    VkCommandBufferBeginInfo begin_info{};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    vkBeginCommandBuffer(command_buffer, &begin_info);
+
+    VkBufferCopy copy_region{};
+    copy_region.srcOffset = 0;
+    copy_region.dstOffset = 0;
+    copy_region.size = size;
+    vkCmdCopyBuffer(command_buffer, src_buffer, dst_buffer, 1, &copy_region);
+
+    vkEndCommandBuffer(command_buffer);
+
+    VkSubmitInfo submit_info{};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &command_buffer;
+
+    vkQueueSubmit(transfer_queue_, 1, &submit_info, VK_NULL_HANDLE);
+    vkQueueWaitIdle(transfer_queue_);
+
+    vkFreeCommandBuffers(device_, transfer_command_pool_, 1, &command_buffer);
+}
+
+void HelloTriangleApplication::create_vertex_buffer()
+{
+    VkDeviceSize buffer_size = sizeof(test_triangle[0]) * test_triangle.size();
+
+    VkBuffer staging_buffer;
+    VkDeviceMemory staging_buffer_memory;
+    
+    create_buffer(
+        buffer_size,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        staging_buffer,
+        staging_buffer_memory
+    );
 
     void* data;
-    vkMapMemory(device_, vertex_buffer_memory_, 0, buffer_create_info.size, 0, &data);
-        memcpy(data, test_triangle.data(), buffer_create_info.size);
-    vkUnmapMemory(device_, vertex_buffer_memory_);
+    vkMapMemory(device_, staging_buffer_memory, 0, buffer_size, 0, &data);
+        memcpy(data, test_triangle.data(), buffer_size);
+    vkUnmapMemory(device_, staging_buffer_memory);
+
+    create_buffer(
+        buffer_size,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        vertex_buffer_,
+        vertex_buffer_memory_
+    );
+
+    copy_buffer(staging_buffer, vertex_buffer_, buffer_size);
+
+    vkDestroyBuffer(device_, staging_buffer, nullptr);
+    vkFreeMemory(device_, staging_buffer_memory, nullptr);
 }
 
 void HelloTriangleApplication::create_command_buffers()
