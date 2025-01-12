@@ -7,7 +7,7 @@
 int main() {
     try
     {
-        HelloTriangleApplication app;
+        GraphicsRunner app;
         app.run();
     } catch (const std::exception& e) {
         std::cerr << e.what() << '\n';

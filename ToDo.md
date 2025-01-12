@@ -76,7 +76,7 @@ and return VK_ERROR_POOL_OUT_OF_MEMORY. This can be particularly
 frustrating if the allocation succeeds on some machines, but fails on 
 others.
 
-Since Vulkan shifts the responsiblity for the allocation to the driver, 
+Since Vulkan shifts the responsibility for the allocation to the driver, 
 it is no longer a strict requirement to only allocate as many 
 descriptors of a certain type 
 (VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, etc.) as specified by the 
@@ -89,3 +89,29 @@ We should search the web to find out how to enable this since support
 has probably been added by now (this tutorial was created like 5 years
 ago).
 
+# Re-implement the Transfer Queue
+
+* [Here is where it assumes we want to use one queue](https://vulkan-tutorial.com/Texture_mapping/Images)
+* [Here is where it recommends making a transfer queue](https://vulkan-tutorial.com/Vertex_buffers/Staging_buffer)
+
+We had to remove the transfer queue because the tutorial was written 
+with only 1 queue in mind. We should find out how to use a transfer 
+queue as well as a graphics and present queue.
+
+# Clean up the code
+
+Right now the code is pretty thrown together and is all in 
+GraphicsRunner.
+
+### We need to:
+
+* Create a dependency tree, so we can visualize what depends on what and 
+so that we can separate everything
+* Most likely we will want to put every tracked resource into its own 
+wrapper class which will handle instantiation and destruction of the 
+resource
+  * This will make it easy to see what depends on what since each object
+  will have its creation managed
+* Clearly label all functions and classes. Should go for a class & 
+method approach for functionality rather than the imperative approach 
+we've been following

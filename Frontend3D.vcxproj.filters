@@ -18,9 +18,6 @@
     <ClCompile Include="Frontend3D.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Triangle\HelloTriangleApplication.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Logging\Logging.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -36,11 +33,11 @@
     <ClCompile Include="SwapChain\SwapChainSupportDetails.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Triangle\GraphicsRunner.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Triangle\HelloTriangleApplication.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Logging\Logging.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -54,6 +51,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="SwapChain\SwapChainSupportDetails.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Triangle\GraphicsRunner.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

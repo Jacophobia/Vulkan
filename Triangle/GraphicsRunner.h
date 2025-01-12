@@ -4,15 +4,13 @@
 // We do not need to include vulkan ourselves as long as we have the
 // following directive which tells glfw to do it
 #define GLFW_INCLUDE_VULKAN
-#define GLM_FORCE_RADIANS
 
 #include <string>
 #include <vector>
 #include <GLFW/glfw3.h>
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
 
 #include "../Queue/QueueFamilyIndices.h"
+#include "../Rendering/Vertex.h"
 #include "../SwapChain/SwapChainSupportDetails.h"
 
 class GraphicsRunner
@@ -30,6 +28,10 @@ private:
     const int width_ = 800;
     const int height_ = 600;
     const char* title_ = "Vulkan";
+
+    const std::string model_path_ = "Models/viking_room.obj";
+    const std::string texture_path_ = "Textures/viking_room.png";
+    
     const std::vector<const char*> validation_layers_ =
     {
         "VK_LAYER_KHRONOS_validation",
@@ -69,8 +71,10 @@ private:
     VkDescriptorPool descriptor_pool_;
     // implicitly destroyed when pool is destroyed
     std::vector<VkDescriptorSet> descriptor_sets_; 
-
-    // TODO: @Combine Buffers 
+    
+    std::vector<Vertex> vertices_;
+    std::vector<uint32_t> indices_;
+    // TODO: Combine Buffers 
     VkBuffer vertex_buffer_;
     VkDeviceMemory vertex_buffer_memory_;
     VkBuffer index_buffer_;
@@ -90,6 +94,10 @@ private:
     VkDeviceMemory texture_image_memory_;
     VkImageView texture_image_view_;
     VkSampler texture_sampler_;
+    
+    VkImage depth_image_;
+    VkDeviceMemory depth_image_memory_;
+    VkImageView depth_image_view_;
 
     static void frame_buffer_resize_callback(GLFWwindow* window, int width, int height);
     void init_window();
@@ -133,16 +141,24 @@ private:
     void create_frame_buffers();
 
     void create_command_pools();
+    VkFormat find_supported_format(const std::vector<VkFormat> &candidates, VkImageTiling tiling,
+                                   VkFormatFeatureFlags features);
+    VkFormat find_depth_format();
+    bool has_stencil_component(VkFormat format);
+
+    void create_depth_resources();
 
     void create_image(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& image_memory);
 
     void create_texture_image();
     
-    VkImageView create_image_view(VkImage image, VkFormat format);
+    VkImageView create_image_view(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags);
 
     void create_texture_image_view();
 
     void create_texture_sampler();
+
+    void load_model();
 
     uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties);
 
