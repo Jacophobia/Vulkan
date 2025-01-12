@@ -15,13 +15,13 @@
 #include "../Queue/QueueFamilyIndices.h"
 #include "../SwapChain/SwapChainSupportDetails.h"
 
-class HelloTriangleApplication
+class GraphicsRunner
 {
 public:
     bool frame_buffer_resized = false;
     
-    HelloTriangleApplication();
-    ~HelloTriangleApplication();
+    GraphicsRunner();
+    ~GraphicsRunner();
     
     void run();
 

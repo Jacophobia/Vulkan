@@ -2,7 +2,7 @@
 // ReSharper disable CppUseStructuredBinding
 
 // ReSharper disable CppTooWideScopeInitStatement
-#include "HelloTriangleApplication.h"
+#include "GraphicsRunner.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -18,15 +18,15 @@
 #include "../Rendering/UniformBufferObject.h"
 #include "../Rendering/Vertex.h"
 
-HelloTriangleApplication::HelloTriangleApplication() :
+GraphicsRunner::GraphicsRunner() :
     window_(nullptr), instance_(), debug_messenger_(), device_(),
     graphics_queue_(), present_queue_(), surface_(), swap_chain_(),
     swap_chain_image_format_(), swap_chain_extent_(), render_pass_(),
     pipeline_layout_(), graphics_pipeline_(), command_pool_() {}
 
-HelloTriangleApplication::~HelloTriangleApplication() = default;
+GraphicsRunner::~GraphicsRunner() = default;
 
-void HelloTriangleApplication::run()
+void GraphicsRunner::run()
 {
     init_window();
     init_vulkan();
@@ -34,9 +34,9 @@ void HelloTriangleApplication::run()
     clean_up();
 }
 
-void HelloTriangleApplication::frame_buffer_resize_callback(GLFWwindow *window, int width, int height)
+void GraphicsRunner::frame_buffer_resize_callback(GLFWwindow *window, int width, int height)
 {
-    const auto app = static_cast<HelloTriangleApplication*>(glfwGetWindowUserPointer(window));
+    const auto app = static_cast<GraphicsRunner*>(glfwGetWindowUserPointer(window));
     app->frame_buffer_resized = true;
     
     // this is a workaround to render while resizing
@@ -49,7 +49,7 @@ void HelloTriangleApplication::frame_buffer_resize_callback(GLFWwindow *window, 
     }
 }
 
-void HelloTriangleApplication::init_window()
+void GraphicsRunner::init_window()
 {
     // initialize a window
     glfwInit();
@@ -63,7 +63,7 @@ void HelloTriangleApplication::init_window()
     glfwSetFramebufferSizeCallback(window_, frame_buffer_resize_callback);
 }
 
-void HelloTriangleApplication::init_vulkan()
+void GraphicsRunner::init_vulkan()
 {
     create_instance();
     set_up_debug_messenger();
@@ -89,7 +89,7 @@ void HelloTriangleApplication::init_vulkan()
     create_sync_objects();
 }
 
-void HelloTriangleApplication::create_instance()
+void GraphicsRunner::create_instance()
 {
     if (enable_validation_layers_ && !are_validation_layers_supported())
     {
@@ -181,7 +181,7 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
     return VK_FALSE;
 }
 
-void HelloTriangleApplication::populate_debug_messenger_create_info(VkDebugUtilsMessengerCreateInfoEXT& create_info)
+void GraphicsRunner::populate_debug_messenger_create_info(VkDebugUtilsMessengerCreateInfoEXT& create_info)
 {
     create_info = {};
     create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
@@ -195,7 +195,7 @@ void HelloTriangleApplication::populate_debug_messenger_create_info(VkDebugUtils
     create_info.pUserData = nullptr;
 }
 
-void HelloTriangleApplication::set_up_debug_messenger()
+void GraphicsRunner::set_up_debug_messenger()
 {
     if (!enable_validation_layers_)
     {
@@ -211,7 +211,7 @@ void HelloTriangleApplication::set_up_debug_messenger()
     }
 }
 
-std::vector<const char *> HelloTriangleApplication::get_required_extensions()
+std::vector<const char *> GraphicsRunner::get_required_extensions()
 {
     uint32_t glfw_extension_count = 0;
 
@@ -227,7 +227,7 @@ std::vector<const char *> HelloTriangleApplication::get_required_extensions()
     return extensions;
 }
 
-bool HelloTriangleApplication::are_extensions_supported(const std::vector<const char*> &glfw_extensions)
+bool GraphicsRunner::are_extensions_supported(const std::vector<const char*> &glfw_extensions)
 {
     uint32_t extension_count = 0;
     vkEnumerateInstanceExtensionProperties(nullptr, &extension_count, nullptr);
@@ -255,7 +255,7 @@ bool HelloTriangleApplication::are_extensions_supported(const std::vector<const 
     return true;
 }
 
-bool HelloTriangleApplication::are_validation_layers_supported()
+bool GraphicsRunner::are_validation_layers_supported()
 {
     uint32_t layer_count;
     vkEnumerateInstanceLayerProperties(&layer_count, nullptr);
@@ -283,7 +283,7 @@ bool HelloTriangleApplication::are_validation_layers_supported()
     return true;
 }
 
-bool HelloTriangleApplication::are_device_extensions_supported(const VkPhysicalDevice device)
+bool GraphicsRunner::are_device_extensions_supported(const VkPhysicalDevice device)
 {
     uint32_t extension_count = 0;
     vkEnumerateDeviceExtensionProperties(device, nullptr, &extension_count, nullptr);
@@ -301,7 +301,7 @@ bool HelloTriangleApplication::are_device_extensions_supported(const VkPhysicalD
     return required_extensions.empty();
 }
 
-SwapChainSupportDetails HelloTriangleApplication::get_swap_chain_support_details(VkPhysicalDevice device)
+SwapChainSupportDetails GraphicsRunner::get_swap_chain_support_details(VkPhysicalDevice device)
 {
     SwapChainSupportDetails details;
 
@@ -328,7 +328,7 @@ SwapChainSupportDetails HelloTriangleApplication::get_swap_chain_support_details
     return details;
 }
 
-int HelloTriangleApplication::rate_device(const VkPhysicalDevice device)
+int GraphicsRunner::rate_device(const VkPhysicalDevice device)
 {
     VkPhysicalDeviceProperties device_properties;
     vkGetPhysicalDeviceProperties(device, &device_properties);
@@ -374,7 +374,7 @@ int HelloTriangleApplication::rate_device(const VkPhysicalDevice device)
     return score;
 }
 
-void HelloTriangleApplication::select_physical_device()
+void GraphicsRunner::select_physical_device()
 {
     uint32_t device_count = 0;
     vkEnumeratePhysicalDevices(instance_, &device_count, nullptr);
@@ -405,7 +405,7 @@ void HelloTriangleApplication::select_physical_device()
     }
 }
 
-QueueFamilyIndices HelloTriangleApplication::find_queue_families(VkPhysicalDevice device)
+QueueFamilyIndices GraphicsRunner::find_queue_families(VkPhysicalDevice device)
 {
     QueueFamilyIndices indices;
 
@@ -452,7 +452,7 @@ QueueFamilyIndices HelloTriangleApplication::find_queue_families(VkPhysicalDevic
     return indices;
 }
 
-void HelloTriangleApplication::create_logical_device()
+void GraphicsRunner::create_logical_device()
 {
     const auto indices = find_queue_families(physical_device_);
     
@@ -510,7 +510,7 @@ void HelloTriangleApplication::create_logical_device()
     vkGetDeviceQueue(device_, indices.present_family.value(), 0, &present_queue_);
 }
 
-void HelloTriangleApplication::create_surface()
+void GraphicsRunner::create_surface()
 {
     if (glfwCreateWindowSurface(instance_, window_, nullptr, &surface_) != VK_SUCCESS)
     {
@@ -518,7 +518,7 @@ void HelloTriangleApplication::create_surface()
     }
 }
 
-VkSurfaceFormatKHR HelloTriangleApplication::select_swap_surface_format(const std::vector<VkSurfaceFormatKHR> &available_formats)
+VkSurfaceFormatKHR GraphicsRunner::select_swap_surface_format(const std::vector<VkSurfaceFormatKHR> &available_formats)
 {
     if (available_formats.empty())
     {
@@ -536,7 +536,7 @@ VkSurfaceFormatKHR HelloTriangleApplication::select_swap_surface_format(const st
     return available_formats[0];
 }
 
-VkPresentModeKHR HelloTriangleApplication::select_swap_present_mode(const std::vector<VkPresentModeKHR>& available_present_modes)
+VkPresentModeKHR GraphicsRunner::select_swap_present_mode(const std::vector<VkPresentModeKHR>& available_present_modes)
 {
     for (const auto& available_present_mode : available_present_modes)
     {
@@ -549,7 +549,7 @@ VkPresentModeKHR HelloTriangleApplication::select_swap_present_mode(const std::v
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 
-VkExtent2D HelloTriangleApplication::select_swap_extent(const VkSurfaceCapabilitiesKHR &capabilities)
+VkExtent2D GraphicsRunner::select_swap_extent(const VkSurfaceCapabilitiesKHR &capabilities)
 {
     if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
     {
@@ -572,7 +572,7 @@ VkExtent2D HelloTriangleApplication::select_swap_extent(const VkSurfaceCapabilit
     return actual_extent;
 }
 
-void HelloTriangleApplication::recreate_swap_chain()
+void GraphicsRunner::recreate_swap_chain()
 {
     int width = 0, height = 0;
     glfwGetFramebufferSize(window_, &width, &height);
@@ -596,7 +596,7 @@ void HelloTriangleApplication::recreate_swap_chain()
     create_frame_buffers();
 }
 
-void HelloTriangleApplication::create_swap_chain()
+void GraphicsRunner::create_swap_chain()
 {
     const auto swap_chain_details = get_swap_chain_support_details(physical_device_);
 
@@ -666,7 +666,7 @@ void HelloTriangleApplication::create_swap_chain()
     swap_chain_extent_ = extent;
 }
 
-void HelloTriangleApplication::create_image_views()
+void GraphicsRunner::create_image_views()
 {
     swap_chain_image_views_.resize(swap_chain_images_.size());
 
@@ -676,7 +676,7 @@ void HelloTriangleApplication::create_image_views()
     }
 }
 
-std::vector<char> HelloTriangleApplication::read_file(const std::string &filename)
+std::vector<char> GraphicsRunner::read_file(const std::string &filename)
 {
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
@@ -694,7 +694,7 @@ std::vector<char> HelloTriangleApplication::read_file(const std::string &filenam
     return buffer;
 }
 
-VkShaderModule HelloTriangleApplication::create_shader_module(const std::vector<char> &code)
+VkShaderModule GraphicsRunner::create_shader_module(const std::vector<char> &code)
 {
     VkShaderModuleCreateInfo create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -710,7 +710,7 @@ VkShaderModule HelloTriangleApplication::create_shader_module(const std::vector<
     return shader_module;
 }
 
-void HelloTriangleApplication::create_render_pass()
+void GraphicsRunner::create_render_pass()
 {
     VkAttachmentDescription color_attachment{};
     color_attachment.format = swap_chain_image_format_;
@@ -757,7 +757,7 @@ void HelloTriangleApplication::create_render_pass()
     }
 }
 
-void HelloTriangleApplication::create_descriptor_set_layout()
+void GraphicsRunner::create_descriptor_set_layout()
 {
     VkDescriptorSetLayoutBinding ubo_layout_binding{};
     ubo_layout_binding.binding = 0;
@@ -790,7 +790,7 @@ void HelloTriangleApplication::create_descriptor_set_layout()
     }
 }
 
-void HelloTriangleApplication::create_graphics_pipeline()
+void GraphicsRunner::create_graphics_pipeline()
 {
     auto vert_shader_code = read_file("Shaders/Vertex/vert.spv");
     auto frag_shader_code = read_file("Shaders/Fragment/frag.spv");
@@ -945,7 +945,7 @@ void HelloTriangleApplication::create_graphics_pipeline()
     vkDestroyShaderModule(device_, frag_shader_module, nullptr);
 }
 
-void HelloTriangleApplication::create_frame_buffers()
+void GraphicsRunner::create_frame_buffers()
 {
     swap_chain_framebuffers_.resize(swap_chain_image_views_.size());
 
@@ -972,7 +972,7 @@ void HelloTriangleApplication::create_frame_buffers()
     }
 }
 
-void HelloTriangleApplication::create_command_pools()
+void GraphicsRunner::create_command_pools()
 {
     auto queue_family_indices = find_queue_families(physical_device_);
 
@@ -992,7 +992,7 @@ void HelloTriangleApplication::create_command_pools()
     }
 }
 
-void HelloTriangleApplication::create_image(uint32_t width, uint32_t height, VkFormat format,
+void GraphicsRunner::create_image(uint32_t width, uint32_t height, VkFormat format,
     VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage&image,
     VkDeviceMemory&image_memory)
 {
@@ -1032,7 +1032,7 @@ void HelloTriangleApplication::create_image(uint32_t width, uint32_t height, VkF
     vkBindImageMemory(device_, image, image_memory, 0);
 }
 
-void HelloTriangleApplication::create_texture_image()
+void GraphicsRunner::create_texture_image()
 {
     int texture_width, texture_height, texture_channels;
     stbi_uc* pixels = stbi_load("Textures/test_texture.jpg", &texture_width, &texture_height, &texture_channels, STBI_rgb_alpha);
@@ -1099,7 +1099,7 @@ void HelloTriangleApplication::create_texture_image()
     vkFreeMemory(device_, staging_buffer_memory, nullptr);
 }
 
-VkImageView HelloTriangleApplication::create_image_view(VkImage image, VkFormat format)
+VkImageView GraphicsRunner::create_image_view(VkImage image, VkFormat format)
 {
     VkImageViewCreateInfo view_info{};
     view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -1120,12 +1120,12 @@ VkImageView HelloTriangleApplication::create_image_view(VkImage image, VkFormat 
     return image_view;
 }
 
-void HelloTriangleApplication::create_texture_image_view()
+void GraphicsRunner::create_texture_image_view()
 {
     texture_image_view_ = create_image_view(texture_image_, VK_FORMAT_R8G8B8A8_SRGB);
 }
 
-void HelloTriangleApplication::create_texture_sampler()
+void GraphicsRunner::create_texture_sampler()
 {
     VkSamplerCreateInfo sampler_create_info{};
     sampler_create_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -1161,7 +1161,7 @@ void HelloTriangleApplication::create_texture_sampler()
     }
 }
 
-uint32_t HelloTriangleApplication::find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties)
+uint32_t GraphicsRunner::find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties)
 {
     VkPhysicalDeviceMemoryProperties memory_properties;
     vkGetPhysicalDeviceMemoryProperties(physical_device_, &memory_properties);
@@ -1177,7 +1177,7 @@ uint32_t HelloTriangleApplication::find_memory_type(uint32_t type_filter, VkMemo
     throw std::runtime_error("Error: unable to find suitable memory type.");
 }
 
-void HelloTriangleApplication::create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& buffer_memory)
+void GraphicsRunner::create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& buffer_memory)
 {
     VkBufferCreateInfo buffer_create_info{};
     buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -1207,7 +1207,7 @@ void HelloTriangleApplication::create_buffer(VkDeviceSize size, VkBufferUsageFla
     vkBindBufferMemory(device_, buffer, buffer_memory, 0);
 }
 
-void HelloTriangleApplication::transition_image_layout(VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout)
+void GraphicsRunner::transition_image_layout(VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout)
 {
     VkCommandBuffer command_buffer = begin_single_time_commands();
 
@@ -1260,7 +1260,7 @@ void HelloTriangleApplication::transition_image_layout(VkImage image, VkFormat f
     end_single_time_commands(command_buffer);
 }
 
-void HelloTriangleApplication::copy_buffer_to_image(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
+void GraphicsRunner::copy_buffer_to_image(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height)
 {
     auto command_buffer = begin_single_time_commands();
 
@@ -1289,7 +1289,7 @@ void HelloTriangleApplication::copy_buffer_to_image(VkBuffer buffer, VkImage ima
     end_single_time_commands(command_buffer);
 }
 
-VkCommandBuffer HelloTriangleApplication::begin_single_time_commands()
+VkCommandBuffer GraphicsRunner::begin_single_time_commands()
 {
     VkCommandBufferAllocateInfo allocate_info{};
     allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
@@ -1309,7 +1309,7 @@ VkCommandBuffer HelloTriangleApplication::begin_single_time_commands()
     return command_buffer;
 }
 
-void HelloTriangleApplication::end_single_time_commands(VkCommandBuffer command_buffer)
+void GraphicsRunner::end_single_time_commands(VkCommandBuffer command_buffer)
 {
     vkEndCommandBuffer(command_buffer);
 
@@ -1324,7 +1324,7 @@ void HelloTriangleApplication::end_single_time_commands(VkCommandBuffer command_
     vkFreeCommandBuffers(device_, command_pool_, 1, &command_buffer);
 }
 
-void HelloTriangleApplication::copy_buffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size)
+void GraphicsRunner::copy_buffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size)
 {
     auto command_buffer = begin_single_time_commands();
 
@@ -1337,7 +1337,7 @@ void HelloTriangleApplication::copy_buffer(VkBuffer src_buffer, VkBuffer dst_buf
     end_single_time_commands(command_buffer);
 }
 
-void HelloTriangleApplication::create_vertex_buffer()
+void GraphicsRunner::create_vertex_buffer()
 {
     VkDeviceSize buffer_size = sizeof(test_shape[0]) * test_shape.size();
 
@@ -1371,7 +1371,7 @@ void HelloTriangleApplication::create_vertex_buffer()
     vkFreeMemory(device_, staging_buffer_memory, nullptr);
 }
 
-void HelloTriangleApplication::create_index_buffer()
+void GraphicsRunner::create_index_buffer()
 {
     VkDeviceSize buffer_size = sizeof(test_shape_indices[0]) * test_shape_indices.size();
 
@@ -1405,7 +1405,7 @@ void HelloTriangleApplication::create_index_buffer()
     vkFreeMemory(device_, staging_buffer_memory, nullptr);
 }
 
-void HelloTriangleApplication::create_uniform_buffers()
+void GraphicsRunner::create_uniform_buffers()
 {
     VkDeviceSize buffer_size = sizeof(UniformBufferObject);
 
@@ -1427,7 +1427,7 @@ void HelloTriangleApplication::create_uniform_buffers()
     }
 }
 
-void HelloTriangleApplication::create_descriptor_pool()
+void GraphicsRunner::create_descriptor_pool()
 {
     std::array<VkDescriptorPoolSize, 2> pool_sizes{};
     pool_sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -1447,7 +1447,7 @@ void HelloTriangleApplication::create_descriptor_pool()
     }
 }
 
-void HelloTriangleApplication::create_descriptor_sets()
+void GraphicsRunner::create_descriptor_sets()
 {
     std::vector layouts(max_frames_in_flight_, descriptor_set_layout_);
 
@@ -1507,7 +1507,7 @@ void HelloTriangleApplication::create_descriptor_sets()
     }
 }
 
-void HelloTriangleApplication::create_command_buffers()
+void GraphicsRunner::create_command_buffers()
 {
     command_buffers_.resize(max_frames_in_flight_);
     
@@ -1523,7 +1523,7 @@ void HelloTriangleApplication::create_command_buffers()
     }
 }
 
-void HelloTriangleApplication::create_sync_objects()
+void GraphicsRunner::create_sync_objects()
 {
     image_available_semaphores_.resize(max_frames_in_flight_);
     render_finished_semaphores_.resize(max_frames_in_flight_);
@@ -1556,7 +1556,7 @@ void HelloTriangleApplication::create_sync_objects()
     }
 }
 
-void HelloTriangleApplication::record_command_buffer(VkCommandBuffer command_buffer, uint32_t image_index)
+void GraphicsRunner::record_command_buffer(VkCommandBuffer command_buffer, uint32_t image_index)
 {
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1617,7 +1617,7 @@ void HelloTriangleApplication::record_command_buffer(VkCommandBuffer command_buf
     }
 }
 
-void HelloTriangleApplication::main_loop()
+void GraphicsRunner::main_loop()
 {
     uint32_t frame_counter = 0;
     auto start_time = std::chrono::high_resolution_clock::now();
@@ -1642,7 +1642,7 @@ void HelloTriangleApplication::main_loop()
     vkDeviceWaitIdle(device_);
 }
 
-void HelloTriangleApplication::draw_frame()
+void GraphicsRunner::draw_frame()
 {
     vkWaitForFences(device_, 1, &in_flight_fences_[current_frame_], VK_TRUE, UINT64_MAX);
 
@@ -1715,7 +1715,7 @@ void HelloTriangleApplication::draw_frame()
     current_frame_ = (current_frame_ + 1) % max_frames_in_flight_;
 }
 
-void HelloTriangleApplication::update_uniform_buffer()
+void GraphicsRunner::update_uniform_buffer()
 {
     static auto start_time = std::chrono::high_resolution_clock::now();
 
@@ -1731,7 +1731,7 @@ void HelloTriangleApplication::update_uniform_buffer()
     memcpy(uniform_buffers_mapped_[current_frame_], &ubo, sizeof(ubo));
 }
 
-void HelloTriangleApplication::clean_up()
+void GraphicsRunner::clean_up()
 {
     clean_up_swap_chain();
 
@@ -1790,7 +1790,7 @@ void HelloTriangleApplication::clean_up()
     glfwTerminate();
 }
 
-void HelloTriangleApplication::clean_up_swap_chain()
+void GraphicsRunner::clean_up_swap_chain()
 {
     for (const auto framebuffer : swap_chain_framebuffers_)
     {

@@ -170,7 +170,7 @@
     <ClCompile Include="Rendering\UniformBufferObject.cpp" />
     <ClCompile Include="Rendering\Vertex.cpp" />
     <ClCompile Include="SwapChain\SwapChainSupportDetails.cpp" />
-    <ClCompile Include="Triangle\HelloTriangleApplication.cpp" />
+    <ClCompile Include="Triangle\GraphicsRunner.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Logging\Logging.h" />
@@ -178,7 +178,7 @@
     <ClInclude Include="Rendering\UniformBufferObject.h" />
     <ClInclude Include="Rendering\Vertex.h" />
     <ClInclude Include="SwapChain\SwapChainSupportDetails.h" />
-    <ClInclude Include="Triangle\HelloTriangleApplication.h" />
+    <ClInclude Include="Triangle\GraphicsRunner.h" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="compile.bat" />
