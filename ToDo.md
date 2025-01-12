@@ -62,4 +62,30 @@ step. Using different formats would also require annoying conversions.
 We will get back to this in the depth buffer chapter, where we'll 
 implement such a system.
 
+# Enable Best Practice Validation
+
+Inadequate descriptor pools are a good example of a problem that the 
+validation layers will not catch: As of Vulkan 1.1, 
+vkAllocateDescriptorSets may fail with the error code 
+VK_ERROR_POOL_OUT_OF_MEMORY if the pool is not sufficiently large, but 
+the driver may also try to solve the problem internally. This means that 
+sometimes (depending on hardware, pool size and allocation size) the 
+driver will let us get away with an allocation that exceeds the limits 
+of our descriptor pool. Other times, vkAllocateDescriptorSets will fail 
+and return VK_ERROR_POOL_OUT_OF_MEMORY. This can be particularly 
+frustrating if the allocation succeeds on some machines, but fails on 
+others.
+
+Since Vulkan shifts the responsiblity for the allocation to the driver, 
+it is no longer a strict requirement to only allocate as many 
+descriptors of a certain type 
+(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, etc.) as specified by the 
+corresponding descriptorCount members for the creation of the descriptor 
+pool. However, it remains best practise to do so, and in the future, 
+VK_LAYER_KHRONOS_validation will warn about this type of problem if you 
+enable Best Practice Validation.
+
+We should search the web to find out how to enable this since support 
+has probably been added by now (this tutorial was created like 5 years
+ago).
 
