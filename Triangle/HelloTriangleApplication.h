@@ -11,8 +11,6 @@
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-// #define STB_IMAGE_IMPLEMENTATION
-#include <stb_image.h>
 
 #include "../Queue/QueueFamilyIndices.h"
 #include "../SwapChain/SwapChainSupportDetails.h"
@@ -56,7 +54,6 @@ private:
     VkDevice device_;
     VkQueue graphics_queue_; // implicitly destroyed
     VkQueue present_queue_; // implicitly destroyed
-    VkQueue transfer_queue_; // implicitly destroyed
     VkSurfaceKHR surface_;
     VkSwapchainKHR swap_chain_;
     std::vector<VkImage> swap_chain_images_;
@@ -69,7 +66,6 @@ private:
     VkPipeline graphics_pipeline_;
     std::vector<VkFramebuffer> swap_chain_framebuffers_;
     VkCommandPool command_pool_;
-    VkCommandPool transfer_command_pool_;
     VkDescriptorPool descriptor_pool_;
     // implicitly destroyed when pool is destroyed
     std::vector<VkDescriptorSet> descriptor_sets_; 
@@ -93,6 +89,7 @@ private:
     VkImage texture_image_;
     VkDeviceMemory texture_image_memory_;
     VkImageView texture_image_view_;
+    VkSampler texture_sampler_;
 
     static void frame_buffer_resize_callback(GLFWwindow* window, int width, int height);
     void init_window();
@@ -144,6 +141,8 @@ private:
     VkImageView create_image_view(VkImage image, VkFormat format);
 
     void create_texture_image_view();
+
+    void create_texture_sampler();
 
     uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties);
 

@@ -11,7 +11,8 @@
 #include <fstream>
 #include <set>
 #include <chrono>
-#include <iostream>
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
 
 #include "../Logging/Logging.h"
 #include "../Rendering/UniformBufferObject.h"
@@ -78,6 +79,7 @@ void HelloTriangleApplication::init_vulkan()
     create_command_pools();
     create_texture_image();
     create_texture_image_view();
+    create_texture_sampler();
     create_vertex_buffer();
     create_index_buffer();
     create_uniform_buffers();
@@ -334,6 +336,11 @@ int HelloTriangleApplication::rate_device(const VkPhysicalDevice device)
     VkPhysicalDeviceFeatures device_features;
     vkGetPhysicalDeviceFeatures(device, &device_features);
 
+    if (!device_features.samplerAnisotropy)
+    {
+        return 0;
+    }
+
     if (!are_device_extensions_supported(device))
     {
         return 0;
@@ -419,12 +426,6 @@ QueueFamilyIndices HelloTriangleApplication::find_queue_families(VkPhysicalDevic
 
         VkBool32 present_support = false;
         vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface_, &present_support);
-
-        bool transfer_support = false;
-        if (queue_family.queueFlags & VK_QUEUE_TRANSFER_BIT)
-        {
-            transfer_support = true;
-        }
         
         // if it supports graphics and present, set it to that
         if (graphics_support && present_support)
@@ -444,12 +445,6 @@ QueueFamilyIndices HelloTriangleApplication::find_queue_families(VkPhysicalDevic
         {
             indices.present_family = i;
         }
-
-        // set transfer family (as long as it hasn't already been set)
-        if (transfer_support && !graphics_support && !indices.transfer_family.has_value())
-        {
-            indices.transfer_family = i;
-        }
         
         i++;
     }
@@ -461,7 +456,7 @@ void HelloTriangleApplication::create_logical_device()
 {
     const auto indices = find_queue_families(physical_device_);
     
-    if (!indices.graphics_family.has_value() || !indices.present_family.has_value() || !indices.transfer_family.has_value())
+    if (!indices.graphics_family.has_value() || !indices.present_family.has_value())
     {
         throw std::runtime_error("Error: queue family not found");
     }
@@ -470,7 +465,6 @@ void HelloTriangleApplication::create_logical_device()
     {
         indices.graphics_family.value(),
         indices.present_family.value(),
-        indices.transfer_family.value(),
     };
 
     std::vector<VkDeviceQueueCreateInfo> queue_create_infos;
@@ -487,6 +481,7 @@ void HelloTriangleApplication::create_logical_device()
     }
 
     VkPhysicalDeviceFeatures device_features{};
+    device_features.samplerAnisotropy = VK_TRUE;
 
     VkDeviceCreateInfo create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -513,7 +508,6 @@ void HelloTriangleApplication::create_logical_device()
 
     vkGetDeviceQueue(device_, indices.graphics_family.value(), 0, &graphics_queue_);
     vkGetDeviceQueue(device_, indices.present_family.value(), 0, &present_queue_);
-    vkGetDeviceQueue(device_, indices.transfer_family.value(), 0, &transfer_queue_);
 }
 
 void HelloTriangleApplication::create_surface()
@@ -629,7 +623,7 @@ void HelloTriangleApplication::create_swap_chain()
 
     const auto indices = find_queue_families(physical_device_);
 
-    if (!indices.graphics_family.has_value() || !indices.present_family.has_value() || !indices.transfer_family.has_value())
+    if (!indices.graphics_family.has_value() || !indices.present_family.has_value())
     {
         throw std::runtime_error("Error: queue family unavailable.");
     }
@@ -637,17 +631,19 @@ void HelloTriangleApplication::create_swap_chain()
     std::vector queue_family_indices =
     {
         indices.graphics_family.value(),
-        indices.transfer_family.value(),
+        indices.present_family.value(),
     };
-
+    
     if (indices.present_family.value() != indices.graphics_family.value())
     {
-        queue_family_indices.push_back(indices.present_family.value());
+        create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
+        create_info.queueFamilyIndexCount = static_cast<uint32_t>(queue_family_indices.size());
+        create_info.pQueueFamilyIndices = queue_family_indices.data();
     }
-    
-    create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-    create_info.queueFamilyIndexCount = static_cast<uint32_t>(queue_family_indices.size());
-    create_info.pQueueFamilyIndices = queue_family_indices.data();
+    else
+    {
+        create_info.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+    }
 
     create_info.preTransform = swap_chain_details.capabilities.currentTransform;
     create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
@@ -985,21 +981,6 @@ void HelloTriangleApplication::create_command_pools()
     {
         throw std::runtime_error("Error: unable to create command pool."); 
     }
-
-    if (!queue_family_indices.transfer_family.has_value())
-    {
-        throw std::runtime_error("Error: transfer family not found.");
-    }
-
-    VkCommandPoolCreateInfo transfer_pool_create_info{};
-    transfer_pool_create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    transfer_pool_create_info.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
-    transfer_pool_create_info.queueFamilyIndex = queue_family_indices.transfer_family.value();
-
-    if (vkCreateCommandPool(device_, &transfer_pool_create_info, nullptr, &transfer_command_pool_) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Error: unable to create command pool."); 
-    }
 }
 
 void HelloTriangleApplication::create_image(uint32_t width, uint32_t height, VkFormat format,
@@ -1135,6 +1116,42 @@ void HelloTriangleApplication::create_texture_image_view()
     texture_image_view_ = create_image_view(texture_image_, VK_FORMAT_R8G8B8A8_SRGB);
 }
 
+void HelloTriangleApplication::create_texture_sampler()
+{
+    VkSamplerCreateInfo sampler_create_info{};
+    sampler_create_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    sampler_create_info.magFilter = VK_FILTER_LINEAR;
+    sampler_create_info.minFilter = VK_FILTER_LINEAR;
+    // what to do when we get to the edge of the image:
+    // - repeat
+    // - mirrored repeat
+    // - clamp to edge
+    // - mirror clamp to edge
+    // - clamp to border
+    sampler_create_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sampler_create_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sampler_create_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sampler_create_info.anisotropyEnable = VK_TRUE;
+
+    VkPhysicalDeviceProperties properties{};
+    vkGetPhysicalDeviceProperties(physical_device_, &properties);
+    
+    sampler_create_info.maxAnisotropy = properties.limits.maxSamplerAnisotropy;
+    sampler_create_info.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+    sampler_create_info.unnormalizedCoordinates = VK_FALSE;
+    sampler_create_info.compareEnable = VK_FALSE;
+    sampler_create_info.compareOp = VK_COMPARE_OP_ALWAYS;
+    sampler_create_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    sampler_create_info.mipLodBias = 0.0f;
+    sampler_create_info.minLod = 0.0f;
+    sampler_create_info.maxLod = 0.0f;
+
+    if (vkCreateSampler(device_, &sampler_create_info, nullptr, &texture_sampler_) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Error: unable to create texture sampler.");
+    }
+}
+
 uint32_t HelloTriangleApplication::find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties)
 {
     VkPhysicalDeviceMemoryProperties memory_properties;
@@ -1268,7 +1285,7 @@ VkCommandBuffer HelloTriangleApplication::begin_single_time_commands()
     VkCommandBufferAllocateInfo allocate_info{};
     allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocate_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocate_info.commandPool = transfer_command_pool_;
+    allocate_info.commandPool = command_pool_;
     allocate_info.commandBufferCount = 1;
 
     VkCommandBuffer command_buffer;
@@ -1292,10 +1309,10 @@ void HelloTriangleApplication::end_single_time_commands(VkCommandBuffer command_
     submit_info.commandBufferCount = 1;
     submit_info.pCommandBuffers = &command_buffer;
 
-    vkQueueSubmit(transfer_queue_, 1, &submit_info, VK_NULL_HANDLE);
-    vkQueueWaitIdle(transfer_queue_);
+    vkQueueSubmit(graphics_queue_, 1, &submit_info, VK_NULL_HANDLE);
+    vkQueueWaitIdle(graphics_queue_);
 
-    vkFreeCommandBuffers(device_, transfer_command_pool_, 1, &command_buffer);
+    vkFreeCommandBuffers(device_, command_pool_, 1, &command_buffer);
 }
 
 void HelloTriangleApplication::copy_buffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size)
@@ -1685,6 +1702,8 @@ void HelloTriangleApplication::clean_up()
 {
     clean_up_swap_chain();
 
+    vkDestroySampler(device_, texture_sampler_, nullptr);
+
     vkDestroyImageView(device_, texture_image_view_, nullptr);
 
     vkDestroyImage(device_, texture_image_, nullptr);
@@ -1715,8 +1734,6 @@ void HelloTriangleApplication::clean_up()
     }
     
     vkDestroyCommandPool(device_, command_pool_, nullptr);
-
-    vkDestroyCommandPool(device_, transfer_command_pool_, nullptr);
     
     vkDestroyPipeline(device_, graphics_pipeline_, nullptr);
     
