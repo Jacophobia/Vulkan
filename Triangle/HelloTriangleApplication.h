@@ -11,6 +11,8 @@
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+// #define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
 
 #include "../Queue/QueueFamilyIndices.h"
 #include "../SwapChain/SwapChainSupportDetails.h"
@@ -88,6 +90,10 @@ private:
     std::vector<VkSemaphore> render_finished_semaphores_;
     std::vector<VkFence> in_flight_fences_;
 
+    VkImage texture_image_;
+    VkDeviceMemory texture_image_memory_;
+    VkImageView texture_image_view_;
+
     static void frame_buffer_resize_callback(GLFWwindow* window, int width, int height);
     void init_window();
 
@@ -131,10 +137,23 @@ private:
 
     void create_command_pools();
 
+    void create_image(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& image_memory);
+
+    void create_texture_image();
+    
+    VkImageView create_image_view(VkImage image, VkFormat format);
+
+    void create_texture_image_view();
+
     uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties);
 
     void create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &buffer_memory);
-    
+    void transition_image_layout(VkImage image, VkFormat format, VkImageLayout old_layout,
+                                 VkImageLayout new_layout);
+    void copy_buffer_to_image(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+    VkCommandBuffer begin_single_time_commands();
+    void end_single_time_commands(VkCommandBuffer command_buffer);
+
     void copy_buffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size);
 
     void create_vertex_buffer();

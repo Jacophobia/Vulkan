@@ -28,7 +28,7 @@ It should be noted that in a real world application, you're not
 supposed to actually call vkAllocateMemory for every individual
 buffer. The maximum number of simultaneous memory allocations is
 limited by the maxMemoryAllocationCount physical device limit,
-which may be as low as 4096 even on high end hardware like an
+which may be as low as 4096 even on high-end hardware like an
 NVIDIA GTX 1080. The right way to allocate memory for a large
 number of objects at the same time is to create a custom allocator
 that splits up a single allocation among many different objects by
@@ -40,6 +40,26 @@ However, for this tutorial it's okay to use a separate allocation
 for every resource, because we won't come close to hitting any of
 these limits for now.
 
-#
+# Double Buffer Meshes & Graphics
+
+* [Video Explanation](https://www.youtube.com/watch?v=YNFaOnhaaso)
+
+Basically, to reduce stuttering, you can have a mesh that you write to 
+and a mesh that you render from. If you modify one and then swap them 
+when that one is done, you will be able to create new things and modify
+meshes without causing performance stutter since the cpu will always be
+active.
+
+# Add VK_FORMAT_R8G8B8A8_SRGB Alternatives
+
+* [Vulkan Tutorial](https://vulkan-tutorial.com/en/Texture_mapping/Images)
+
+It is possible that the VK_FORMAT_R8G8B8A8_SRGB format is not supported 
+by the graphics hardware. You should have a list of acceptable 
+alternatives and go with the best one that is supported. However, 
+support for this particular format is so widespread that we'll skip this 
+step. Using different formats would also require annoying conversions. 
+We will get back to this in the depth buffer chapter, where we'll 
+implement such a system.
 
 
