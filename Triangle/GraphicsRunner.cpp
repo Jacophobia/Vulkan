@@ -1127,7 +1127,7 @@ void GraphicsRunner::generate_mip_maps(VkImage image, VkFormat image_format, int
     VkFormatProperties format_properties;
     vkGetPhysicalDeviceFormatProperties(physical_device_, image_format, &format_properties);
 
-    // TODO:
+    // TODO: Add Image Resizing
     if (!(format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT))
     {
         throw std::runtime_error("Error: texture image format does not support linear blitting.");
@@ -1148,7 +1148,7 @@ void GraphicsRunner::generate_mip_maps(VkImage image, VkFormat image_format, int
     int32_t mip_width = texture_width;
     int32_t mip_height = texture_height;
 
-    for (uint32_t i = 0; i < mip_levels; ++i)
+    for (uint32_t i = 1; i < mip_levels; ++i)
     {
         barrier.subresourceRange.baseMipLevel = i - 1;
         barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
@@ -1353,7 +1353,7 @@ void GraphicsRunner::create_texture_sampler()
     sampler_create_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
     sampler_create_info.mipLodBias = 0.0f;
     sampler_create_info.minLod = 0.0f;
-    sampler_create_info.maxLod = 0.0f;
+    sampler_create_info.maxLod = static_cast<float>(mip_levels_);
 
     if (vkCreateSampler(device_, &sampler_create_info, nullptr, &texture_sampler_) != VK_SUCCESS)
     {
@@ -1989,7 +1989,7 @@ void GraphicsRunner::update_uniform_buffer()
     float time = std::chrono::duration<float>(current_time - start_time).count();
 
     UniformBufferObject ubo{};
-    ubo.model = rotate(glm::mat4(1.0f), time * glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    ubo.model = rotate(glm::mat4(1.0f), time * glm::radians(10.0f), glm::vec3(0.0f, 0.0f, 1.0f));
     ubo.view = lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
     ubo.proj = glm::perspective(glm::radians(45.0f), static_cast<float>(swap_chain_extent_.width) / static_cast<float>(swap_chain_extent_.height), 0.1f, 10.0f);
     ubo.proj[1][1] *= -1;
