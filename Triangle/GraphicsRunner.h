@@ -90,6 +90,7 @@ private:
     std::vector<VkSemaphore> render_finished_semaphores_;
     std::vector<VkFence> in_flight_fences_;
 
+    uint32_t mip_levels_;
     VkImage texture_image_;
     VkDeviceMemory texture_image_memory_;
     VkImageView texture_image_view_;
@@ -148,11 +149,14 @@ private:
 
     void create_depth_resources();
 
-    void create_image(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& image_memory);
+    void create_image(uint32_t width, uint32_t height, uint32_t mip_levels, VkFormat format, VkImageTiling tiling, VkImageUsageFlags
+                      usage, VkMemoryPropertyFlags properties, VkImage &image, VkDeviceMemory &image_memory);
+    void generate_mip_maps(VkImage image, VkFormat image_format, int32_t texture_width,
+                           int32_t texture_height, uint32_t mip_levels);
 
     void create_texture_image();
     
-    VkImageView create_image_view(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags);
+    VkImageView create_image_view(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags, uint32_t mip_levels);
 
     void create_texture_image_view();
 
@@ -164,7 +168,7 @@ private:
 
     void create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &buffer_memory);
     void transition_image_layout(VkImage image, VkFormat format, VkImageLayout old_layout,
-                                 VkImageLayout new_layout);
+                                 VkImageLayout new_layout, uint32_t mip_levels);
     void copy_buffer_to_image(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
     VkCommandBuffer begin_single_time_commands();
     void end_single_time_commands(VkCommandBuffer command_buffer);

@@ -11,14 +11,9 @@
 #include <fstream>
 #include <set>
 #include <chrono>
-// #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
-// #define GLM_FORCE_RADIANS
-// #define GLM_FORCE_DEPTH_ZERO_TO_ONE
-// #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-// #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 #include <unordered_map>
 
@@ -683,7 +678,7 @@ void GraphicsRunner::create_image_views()
 
     for (size_t i = 0; i < swap_chain_images_.size(); ++i)
     {
-        swap_chain_image_views_[i] = create_image_view(swap_chain_images_[i], swap_chain_image_format_, VK_IMAGE_ASPECT_COLOR_BIT);
+        swap_chain_image_views_[i] = create_image_view(swap_chain_images_[i], swap_chain_image_format_, VK_IMAGE_ASPECT_COLOR_BIT, 1);
     }
 }
 
@@ -1076,18 +1071,18 @@ void GraphicsRunner::create_depth_resources()
     create_image(
         swap_chain_extent_.width,
         swap_chain_extent_.height,
+        1,
         depth_format,
         VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        depth_image_,
-        depth_image_memory_
+        depth_image_, depth_image_memory_
     );
 
-    depth_image_view_ = create_image_view(depth_image_, depth_format, VK_IMAGE_ASPECT_DEPTH_BIT);
+    depth_image_view_ = create_image_view(depth_image_, depth_format, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 }
 
-void GraphicsRunner::create_image(uint32_t width, uint32_t height, VkFormat format,
+void GraphicsRunner::create_image(uint32_t width, uint32_t height, uint32_t mip_levels, VkFormat format,
                                   VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage&image,
                                   VkDeviceMemory&image_memory)
 {
@@ -1097,7 +1092,7 @@ void GraphicsRunner::create_image(uint32_t width, uint32_t height, VkFormat form
     image_create_info.extent.width = width;
     image_create_info.extent.height = height;
     image_create_info.extent.depth = 1;
-    image_create_info.mipLevels = 1;
+    image_create_info.mipLevels = mip_levels;
     image_create_info.arrayLayers = 1;
     image_create_info.format = format;
     image_create_info.tiling = tiling;
@@ -1127,10 +1122,123 @@ void GraphicsRunner::create_image(uint32_t width, uint32_t height, VkFormat form
     vkBindImageMemory(device_, image, image_memory, 0);
 }
 
+void GraphicsRunner::generate_mip_maps(VkImage image, VkFormat image_format, int32_t texture_width, int32_t texture_height, uint32_t mip_levels)
+{
+    VkFormatProperties format_properties;
+    vkGetPhysicalDeviceFormatProperties(physical_device_, image_format, &format_properties);
+
+    // TODO:
+    if (!(format_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT))
+    {
+        throw std::runtime_error("Error: texture image format does not support linear blitting.");
+    }
+    
+    auto command_buffer = begin_single_time_commands();
+
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.image = image;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.baseArrayLayer = 0;
+    barrier.subresourceRange.layerCount = 1;
+    barrier.subresourceRange.levelCount = 1;
+
+    int32_t mip_width = texture_width;
+    int32_t mip_height = texture_height;
+
+    for (uint32_t i = 0; i < mip_levels; ++i)
+    {
+        barrier.subresourceRange.baseMipLevel = i - 1;
+        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+        vkCmdPipelineBarrier(
+            command_buffer,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &barrier
+        );
+
+        VkImageBlit blit{};
+        blit.srcOffsets[0] = {0, 0, 0};
+        blit.srcOffsets[1] = {mip_width, mip_height, 1};
+        blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blit.srcSubresource.mipLevel = i - 1;
+        blit.srcSubresource.baseArrayLayer = 0;
+        blit.srcSubresource.layerCount = 1;
+        blit.dstOffsets[0] = {0, 0, 0};
+        blit.dstOffsets[1] = {mip_width > 1 ? mip_width / 2 : 1, mip_height > 1 ? mip_height / 2 : 1, 1};
+        blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blit.dstSubresource.mipLevel = i;
+        blit.dstSubresource.baseArrayLayer = 0;
+        blit.dstSubresource.layerCount = 1;
+
+        vkCmdBlitImage(
+            command_buffer,
+            image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1, &blit,
+            VK_FILTER_LINEAR
+        );
+
+        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        barrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+        vkCmdPipelineBarrier(
+            command_buffer,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            0,
+            0, nullptr,
+            0, nullptr,
+            1, &barrier
+        );
+
+        if (mip_width > 1)
+        {
+            mip_width /= 2;
+        }
+
+        if (mip_height > 1)
+        {
+            mip_height /= 2;
+        }
+    }
+
+    barrier.subresourceRange.baseMipLevel = mip_levels - 1;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+    vkCmdPipelineBarrier(
+        command_buffer,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        0,
+        0, nullptr,
+        0, nullptr,
+        1, &barrier
+    );
+
+    end_single_time_commands(command_buffer);
+}
+
 void GraphicsRunner::create_texture_image()
 {
     int texture_width, texture_height, texture_channels;
     stbi_uc* pixels = stbi_load(texture_path_.c_str(), &texture_width, &texture_height, &texture_channels, STBI_rgb_alpha);
+
+    mip_levels_ = static_cast<uint32_t>(std::floor(std::log2(std::max(texture_width, texture_height)))) + 1;
 
     VkDeviceSize image_size = texture_width * texture_height * 4;
 
@@ -1160,11 +1268,12 @@ void GraphicsRunner::create_texture_image()
     create_image(
         texture_width,
         texture_height,
+        mip_levels_,
         // TODO: Add VK_FORMAT_R8G8B8A8_SRGB Alternatives
         VK_FORMAT_R8G8B8A8_SRGB,
         VK_IMAGE_TILING_OPTIMAL,
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 
         texture_image_,
         texture_image_memory_
     );
@@ -1173,7 +1282,8 @@ void GraphicsRunner::create_texture_image()
         texture_image_,
         VK_FORMAT_R8G8B8A8_SRGB,
         VK_IMAGE_LAYOUT_UNDEFINED,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        mip_levels_
     );
 
     copy_buffer_to_image(
@@ -1183,18 +1293,13 @@ void GraphicsRunner::create_texture_image()
         static_cast<uint32_t>(texture_height)
     );
 
-    transition_image_layout(
-        texture_image_,
-        VK_FORMAT_R8G8B8A8_SRGB,
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-    );
-
     vkDestroyBuffer(device_, staging_buffer, nullptr);
     vkFreeMemory(device_, staging_buffer_memory, nullptr);
+
+    generate_mip_maps(texture_image_, VK_FORMAT_R8G8B8A8_SRGB, texture_width, texture_height, mip_levels_);
 }
 
-VkImageView GraphicsRunner::create_image_view(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags)
+VkImageView GraphicsRunner::create_image_view(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags, uint32_t mip_levels)
 {
     VkImageViewCreateInfo view_info{};
     view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -1203,7 +1308,7 @@ VkImageView GraphicsRunner::create_image_view(VkImage image, VkFormat format, Vk
     view_info.format = format;
     view_info.subresourceRange.aspectMask = aspect_flags;
     view_info.subresourceRange.baseMipLevel = 0;
-    view_info.subresourceRange.levelCount = 1;
+    view_info.subresourceRange.levelCount = mip_levels;
     view_info.subresourceRange.baseArrayLayer = 0;
     view_info.subresourceRange.layerCount = 1;
 
@@ -1217,7 +1322,7 @@ VkImageView GraphicsRunner::create_image_view(VkImage image, VkFormat format, Vk
 
 void GraphicsRunner::create_texture_image_view()
 {
-    texture_image_view_ = create_image_view(texture_image_, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
+    texture_image_view_ = create_image_view(texture_image_, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, mip_levels_);
 }
 
 void GraphicsRunner::create_texture_sampler()
@@ -1344,7 +1449,7 @@ void GraphicsRunner::create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, 
     vkBindBufferMemory(device_, buffer, buffer_memory, 0);
 }
 
-void GraphicsRunner::transition_image_layout(VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout)
+void GraphicsRunner::transition_image_layout(VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout, uint32_t mip_levels)
 {
     VkCommandBuffer command_buffer = begin_single_time_commands();
 
@@ -1371,7 +1476,7 @@ void GraphicsRunner::transition_image_layout(VkImage image, VkFormat format, VkI
     }
     
     barrier.subresourceRange.baseMipLevel = 0;
-    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.levelCount = mip_levels;
     barrier.subresourceRange.baseArrayLayer = 0;
     barrier.subresourceRange.layerCount = 1;
 

@@ -115,3 +115,20 @@ resource
 * Clearly label all functions and classes. Should go for a class & 
 method approach for functionality rather than the imperative approach 
 we've been following
+
+# Add Image Resizing
+
+* [Vulkan Tutorial](https://vulkan-tutorial.com/en/Generating_Mipmaps)
+* [STB Image Resize](https://github.com/nothings/stb/blob/master/stb_image_resize2.h)
+
+You could implement a function that searches common texture image 
+formats for one that does support linear blitting, or you could 
+implement the mipmap generation in software with a library like 
+stb_image_resize. Each mip level can then be loaded into the image in 
+the same way that you loaded the original image.
+
+It should be noted that it is uncommon in practice to generate the 
+mipmap levels at runtime anyway. Usually they are pre-generated and 
+stored in the texture file alongside the base level to improve loading 
+speed. Implementing resizing in software and loading multiple levels 
+from a file is left as an exercise to the reader.
