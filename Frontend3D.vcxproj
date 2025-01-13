@@ -165,20 +165,24 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Frontend3D.cpp" />
+    <ClCompile Include="Image\Image.cpp" />
     <ClCompile Include="Logging\Logging.cpp" />
     <ClCompile Include="Queue\QueueFamilyIndices.cpp" />
     <ClCompile Include="Rendering\UniformBufferObject.cpp" />
     <ClCompile Include="Rendering\Vertex.cpp" />
+    <ClCompile Include="SwapChain\SwapChain.cpp" />
     <ClCompile Include="SwapChain\SwapChainSupportDetails.cpp" />
-    <ClCompile Include="Triangle\GraphicsRunner.cpp" />
+    <ClCompile Include="Graphics\GraphicsRunner.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Image\Image.h" />
     <ClInclude Include="Logging\Logging.h" />
     <ClInclude Include="Queue\QueueFamilyIndices.h" />
     <ClInclude Include="Rendering\UniformBufferObject.h" />
     <ClInclude Include="Rendering\Vertex.h" />
+    <ClInclude Include="SwapChain\SwapChain.h" />
     <ClInclude Include="SwapChain\SwapChainSupportDetails.h" />
-    <ClInclude Include="Triangle\GraphicsRunner.h" />
+    <ClInclude Include="Graphics\GraphicsRunner.h" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="compile.bat" />

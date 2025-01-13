@@ -2,7 +2,7 @@
 #include <exception>
 #include <iostream>
 
-#include "Triangle/GraphicsRunner.h"
+#include "Graphics/GraphicsRunner.h"
 
 int main() {
     try
