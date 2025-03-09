@@ -164,6 +164,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Camera\Camera.cpp" />
     <ClCompile Include="Frontend3D.cpp" />
     <ClCompile Include="Image\Image.cpp" />
     <ClCompile Include="Logging\Logging.cpp" />
@@ -175,6 +176,7 @@
     <ClCompile Include="Graphics\GraphicsRunner.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Camera\Camera.h" />
     <ClInclude Include="Image\Image.h" />
     <ClInclude Include="Logging\Logging.h" />
     <ClInclude Include="Queue\QueueFamilyIndices.h" />

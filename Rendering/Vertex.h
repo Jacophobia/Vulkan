@@ -16,7 +16,8 @@ struct Vertex
     bool operator==(const Vertex & rhs) const;
 };
 
-template<> struct std::hash<Vertex>
+template<>
+struct std::hash<Vertex>
 {
     size_t operator()(Vertex const& vertex) const noexcept;
 };

@@ -38,8 +38,6 @@ void graphics::Image::create(VkDevice device, const CreateImageInfo &image_info)
     }
 
     vkBindImageMemory(device, image_, image_memory_, 0);
-
-    
 }
 
 void graphics::Image::clean(VkDevice device)

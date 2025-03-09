@@ -1,4 +1,3 @@
-
 #include <exception>
 #include <iostream>
 #include <chrono>
@@ -9,7 +8,11 @@
 int main() {
     try
     {
-        GraphicsRunner app;
+        Camera camera;
+        camera.move(glm::vec3(-1,-1,-2));
+        camera.set_target({0,0,0});
+        
+        GraphicsRunner app(&camera);
         app.init();
         
         uint32_t frame_counter = 0;
@@ -20,6 +23,8 @@ int main() {
             app.update();
     
             ++frame_counter;
+
+            camera.set_position({frame_counter % 100000 / 1000.f, frame_counter % 100000 / 1000.f, frame_counter % 100000 / 1000.f});
     
             auto current_time = std::chrono::high_resolution_clock::now();
             if (std::chrono::duration<float>(current_time - start_time).count() >= 1.0f)

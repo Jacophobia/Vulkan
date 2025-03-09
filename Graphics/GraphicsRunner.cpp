@@ -21,11 +21,12 @@
 #include "../Rendering/UniformBufferObject.h"
 #include "../Rendering/Vertex.h"
 
-GraphicsRunner::GraphicsRunner() :
+GraphicsRunner::GraphicsRunner(Camera* camera) :
     window_(nullptr), instance_(), debug_messenger_(), device_(),
     graphics_queue_(), present_queue_(), surface_(), swap_chain_(),
     swap_chain_image_format_(), swap_chain_extent_(), render_pass_(),
-    pipeline_layout_(), graphics_pipeline_(), command_pool_() {}
+    pipeline_layout_(), graphics_pipeline_(), command_pool_(),
+    camera_(camera) {}
 
 GraphicsRunner::~GraphicsRunner() = default;
 
@@ -37,7 +38,7 @@ void GraphicsRunner::init()
 
 void GraphicsRunner::update()
 {
-    main_loop();
+    draw_frame();
 }
 
 void GraphicsRunner::frame_buffer_resize_callback(GLFWwindow *window, int width, int height)
@@ -706,6 +707,8 @@ void GraphicsRunner::create_swap_chain()
 
     swap_chain_image_format_ = surface_format.format;
     swap_chain_extent_ = extent;
+
+    // TODO: If needed, update the camera's width and height so it scales with window size
 }
 
 void GraphicsRunner::create_image_views()
@@ -1952,31 +1955,6 @@ void GraphicsRunner::record_command_buffer(VkCommandBuffer command_buffer, uint3
     }
 }
 
-void GraphicsRunner::main_loop()
-{
-    uint32_t frame_counter = 0;
-    auto start_time = std::chrono::high_resolution_clock::now();
-    
-    while (!glfwWindowShouldClose(window_))
-    {
-        glfwPollEvents();
-        draw_frame();
-        
-        ++frame_counter;
-        
-        auto current_time = std::chrono::high_resolution_clock::now();
-        if (std::chrono::duration<float>(current_time - start_time).count() >= 1.0f)
-        {
-            logging::info(std::format("FPS: {}", frame_counter));
-            
-            start_time = std::chrono::high_resolution_clock::now();
-            frame_counter = 0;
-        }
-    }
-
-    vkDeviceWaitIdle(device_);
-}
-
 void GraphicsRunner::draw_frame()
 {
     vkWaitForFences(device_, 1, &in_flight_fences_[current_frame_], VK_TRUE, UINT64_MAX);
@@ -2052,16 +2030,7 @@ void GraphicsRunner::draw_frame()
 
 void GraphicsRunner::update_uniform_buffer()
 {
-    static auto start_time = std::chrono::high_resolution_clock::now();
-
-    auto current_time = std::chrono::high_resolution_clock::now();
-    float time = std::chrono::duration<float>(current_time - start_time).count();
-
-    UniformBufferObject ubo{};
-    ubo.model = rotate(glm::mat4(1.0f), time * glm::radians(10.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    ubo.view = lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    ubo.proj = glm::perspective(glm::radians(45.0f), static_cast<float>(swap_chain_extent_.width) / static_cast<float>(swap_chain_extent_.height), 0.1f, 10.0f);
-    ubo.proj[1][1] *= -1;
+    UniformBufferObject ubo = camera_->get_ubo();
 
     memcpy(uniform_buffers_mapped_[current_frame_], &ubo, sizeof(ubo));
 }

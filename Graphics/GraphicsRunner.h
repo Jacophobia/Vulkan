@@ -9,6 +9,7 @@
 #include <vector>
 #include <GLFW/glfw3.h>
 
+#include "../Camera/Camera.h"
 #include "../Queue/QueueFamilyIndices.h"
 #include "../Rendering/Vertex.h"
 #include "../SwapChain/SwapChainSupportDetails.h"
@@ -18,7 +19,7 @@ class GraphicsRunner
 public:
     bool frame_buffer_resized = false;
     
-    GraphicsRunner();
+    GraphicsRunner(Camera* camera);
     ~GraphicsRunner();
 
     void init();
@@ -117,6 +118,9 @@ private:
     VkImageView color_image_view_;
 
     VkSampleCountFlagBits msaa_samples_ = VK_SAMPLE_COUNT_1_BIT;
+
+    /* Externally Modified */
+    Camera* camera_;
 
     static void frame_buffer_resize_callback(GLFWwindow* window, int width, int height);
     void init_window();
