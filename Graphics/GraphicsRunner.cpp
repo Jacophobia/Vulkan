@@ -29,12 +29,15 @@ GraphicsRunner::GraphicsRunner() :
 
 GraphicsRunner::~GraphicsRunner() = default;
 
-void GraphicsRunner::run()
+void GraphicsRunner::init()
 {
     init_window();
     init_vulkan();
+}
+
+void GraphicsRunner::update()
+{
     main_loop();
-    clean_up();
 }
 
 void GraphicsRunner::frame_buffer_resize_callback(GLFWwindow *window, int width, int height)
@@ -132,7 +135,7 @@ void GraphicsRunner::create_instance()
         create_info.ppEnabledLayerNames = validation_layers_.data();
 
         populate_debug_messenger_create_info(debug_create_info);
-        create_info.pNext = (VkDebugUtilsMessengerCreateInfoEXT*) &debug_create_info;
+        create_info.pNext = &debug_create_info;
     }
     else
     {
@@ -2065,6 +2068,9 @@ void GraphicsRunner::update_uniform_buffer()
 
 void GraphicsRunner::clean_up()
 {
+    // wait for last frame & stuff to process
+    vkDeviceWaitIdle(device_);
+    
     clean_up_swap_chain();
 
     vkDestroySampler(device_, texture_sampler_, nullptr);
@@ -2120,6 +2126,13 @@ void GraphicsRunner::clean_up()
     glfwDestroyWindow(window_);
     
     glfwTerminate();
+}
+
+bool GraphicsRunner::done()
+{
+    glfwPollEvents();
+
+    return glfwWindowShouldClose(window_);
 }
 
 void GraphicsRunner::clean_up_swap_chain()

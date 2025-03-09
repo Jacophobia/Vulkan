@@ -20,8 +20,12 @@ public:
     
     GraphicsRunner();
     ~GraphicsRunner();
-    
-    void run();
+
+    void init();
+    void update();
+    void clean_up();
+
+    bool done();
 
 private:
     // constants
@@ -214,8 +218,6 @@ private:
     void draw_frame();
     
     void update_uniform_buffer();
-    
-    void clean_up();
 
     void clean_up_swap_chain();
 };
