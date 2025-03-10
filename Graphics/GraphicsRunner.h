@@ -30,16 +30,16 @@ public:
 
     /* Registered Resources */
     struct ResourceInfo {
-        std::vector<Vertex> vertices;
-        std::vector<uint32_t> indices;
-        UniformBufferObject ubo;
+        std::string model_path;
+        std::string texture_path;
+        glm::mat4 model;
     };
 
     // Register a new renderable resource. Returns a unique identifier for the resource.
     uint32_t register_resource(const ResourceInfo& info);
 
     // Update the resource’s uniform (transformation) data.
-    void update_resource(uint32_t resource_id, const UniformBufferObject& new_ubo);
+    void update_resource(unsigned int resource_id, const glm::mat4& new_ubo);
 
     // Unregister (delete) a resource.
     void unregister_resource(uint32_t resource_id);
@@ -51,7 +51,6 @@ private:
     const char* title_ = "Vulkan";
 
     const size_t max_frames_in_flight_ = 2;
-    const std::string texture_path_ = "Textures/viking_room.png";
     
     const std::vector<const char*> validation_layers_ =
     {
@@ -89,7 +88,8 @@ private:
     
     VkRenderPass render_pass_;
     
-    VkDescriptorSetLayout descriptor_set_layout_;
+    VkDescriptorSetLayout global_descriptor_set_layout_;
+    VkDescriptorSetLayout texture_descriptor_set_layout_;
     
     VkPipelineLayout pipeline_layout_;
     VkPipeline graphics_pipeline_;
@@ -111,12 +111,6 @@ private:
     std::vector<VkSemaphore> render_finished_semaphores_;
     std::vector<VkFence> in_flight_fences_;
 
-    uint32_t mip_levels_;
-    VkImage texture_image_;
-    VkDeviceMemory texture_image_memory_;
-    VkImageView texture_image_view_;
-    VkSampler texture_sampler_;
-    
     VkImage depth_image_;
     VkDeviceMemory depth_image_memory_;
     VkImageView depth_image_view_;
@@ -132,17 +126,28 @@ private:
 
     struct RenderableResource {
         uint32_t id;
+        // model
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
         VkBuffer vertexBuffer;
         VkDeviceMemory vertexBufferMemory;
         VkBuffer indexBuffer;
         VkDeviceMemory indexBufferMemory;
-        UniformBufferObject ubo;
+        // texture
+        uint32_t mip_levels;
+        VkImage texture_image;
+        VkDeviceMemory texture_image_memory;
+        VkImageView texture_image_view;
+        VkSampler texture_sampler;
+        VkDescriptorSet texture_descriptor_set;
+        // position
+        glm::mat4 model;
     };
 
     // Container mapping resource IDs to their renderable data.
     std::unordered_map<uint32_t, RenderableResource> resources_;
+    std::unordered_map<std::string, std::vector<Vertex>> vertex_cache_;
+    std::unordered_map<std::string, std::vector<uint32_t>> index_cache_;
     uint32_t nextResourceId_ = 1;
 
     static void frame_buffer_resize_callback(GLFWwindow* window, int width, int height);
@@ -180,8 +185,10 @@ private:
     VkShaderModule create_shader_module(const std::vector<char>& code);
 
     void create_render_pass();
-
-    void create_descriptor_set_layout();
+    
+    void create_global_descriptor_set_layout();
+    
+    void create_texture_descriptor_set_layout();
     
     void create_graphics_pipeline();
 
@@ -203,13 +210,13 @@ private:
     void generate_mip_maps(VkImage image, VkFormat image_format, int32_t texture_width,
                            int32_t texture_height, uint32_t mip_levels);
 
-    void create_texture_image();
+    void create_texture_image(const std::string &texture_path, RenderableResource &resource);
     
     VkImageView create_image_view(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags, uint32_t mip_levels);
 
-    void create_texture_image_view();
+    void create_texture_image_view(RenderableResource &resource);
 
-    void create_texture_sampler();
+    void create_texture_sampler(RenderableResource &resource);
 
     uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties);
 

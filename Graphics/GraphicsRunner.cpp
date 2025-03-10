@@ -20,6 +20,7 @@
 #include "../Logging/Logging.h"
 #include "../Rendering/UniformBufferObject.h"
 #include "../Rendering/Vertex.h"
+#include "../Models/ModelLoading.h"
 
 GraphicsRunner::GraphicsRunner(Camera* camera) :
     window_(nullptr), instance_(), debug_messenger_(), device_(),
@@ -45,11 +46,28 @@ uint32_t GraphicsRunner::register_resource(const ResourceInfo &info)
 {
     RenderableResource resource;
     resource.id = nextResourceId_++;
-    resource.vertices = info.vertices;
-    resource.indices = info.indices;
-    resource.ubo = info.ubo;
+    resource.model = info.model;
 
-    // Create vertex buffer for the resource.
+    // Load model (with caching)
+    if (vertex_cache_.contains(info.model_path) && index_cache_.contains(info.model_path))
+    {
+        // TODO: try to find a way to use references instead of copying every time
+        resource.vertices = vertex_cache_[info.model_path];
+        resource.indices = index_cache_[info.model_path];
+    }
+    else
+    {
+        model_loading::load_model(resource.vertices, resource.indices, info.model_path);
+        vertex_cache_[info.model_path] = resource.vertices;
+        index_cache_[info.model_path] = resource.indices;
+    }
+    
+    logging::info(std::format("Vertices' size: {}, Indices' size: {}", resource.vertices.size(), resource.indices.size()));
+
+    assert(!resource.vertices.empty());
+    assert(!resource.indices.empty());
+
+    // Create vertex buffer.
     VkDeviceSize vertexBufferSize = sizeof(Vertex) * resource.vertices.size();
     VkBuffer stagingVertexBuffer;
     VkDeviceMemory stagingVertexBufferMemory;
@@ -74,7 +92,7 @@ uint32_t GraphicsRunner::register_resource(const ResourceInfo &info)
     vkDestroyBuffer(device_, stagingVertexBuffer, nullptr);
     vkFreeMemory(device_, stagingVertexBufferMemory, nullptr);
 
-    // Create index buffer for the resource.
+    // Create index buffer.
     VkDeviceSize indexBufferSize = sizeof(uint32_t) * resource.indices.size();
     VkBuffer stagingIndexBuffer;
     VkDeviceMemory stagingIndexBufferMemory;
@@ -98,16 +116,48 @@ uint32_t GraphicsRunner::register_resource(const ResourceInfo &info)
     vkDestroyBuffer(device_, stagingIndexBuffer, nullptr);
     vkFreeMemory(device_, stagingIndexBufferMemory, nullptr);
 
-    // Store the resource.
+    // Create texture image, image view, and sampler.
+    create_texture_image(info.texture_path, resource);
+    create_texture_image_view(resource);
+    create_texture_sampler(resource);
+
+    // Allocate a descriptor set for this resource’s texture.
+    VkDescriptorSetAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    alloc_info.descriptorPool = descriptor_pool_;
+    alloc_info.descriptorSetCount = 1;
+    alloc_info.pSetLayouts = &texture_descriptor_set_layout_;
+    if (vkAllocateDescriptorSets(device_, &alloc_info, &resource.texture_descriptor_set) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Error: unable to allocate texture descriptor set for resource");
+    }
+    
+    // Update the texture descriptor set with the resource’s texture info.
+    VkDescriptorImageInfo image_info{};
+    image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    image_info.imageView = resource.texture_image_view;
+    image_info.sampler = resource.texture_sampler;
+    
+    VkWriteDescriptorSet descriptor_write{};
+    descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    descriptor_write.dstSet = resource.texture_descriptor_set;
+    descriptor_write.dstBinding = 0;
+    descriptor_write.dstArrayElement = 0;
+    descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    descriptor_write.descriptorCount = 1;
+    descriptor_write.pImageInfo = &image_info;
+    
+    vkUpdateDescriptorSets(device_, 1, &descriptor_write, 0, nullptr);
+
     resources_[resource.id] = resource;
     return resource.id;
 }
 
-void GraphicsRunner::update_resource(uint32_t resource_id, const UniformBufferObject &new_ubo)
+void GraphicsRunner::update_resource(uint32_t resource_id, const glm::mat4 &new_ubo)
 {
     if (resources_.contains(resource_id))
     {
-        resources_[resource_id].ubo = new_ubo;
+        resources_[resource_id].model = new_ubo;
         // If you decide later to store each resource's uniform data in a Vulkan buffer,
         // you can update that buffer here.
     }
@@ -121,6 +171,11 @@ void GraphicsRunner::unregister_resource(uint32_t resource_id)
 {
     if (resources_.contains(resource_id))
     {
+        vkDestroySampler(device_, resources_[resource_id].texture_sampler, nullptr);
+        vkDestroyImageView(device_, resources_[resource_id].texture_image_view, nullptr);
+        vkDestroyImage(device_, resources_[resource_id].texture_image, nullptr);
+        vkFreeMemory(device_, resources_[resource_id].texture_image_memory, nullptr);
+        
         vkDestroyBuffer(device_, resources_[resource_id].vertexBuffer, nullptr);
         vkFreeMemory(device_, resources_[resource_id].vertexBufferMemory, nullptr);
         vkDestroyBuffer(device_, resources_[resource_id].indexBuffer, nullptr);
@@ -172,15 +227,13 @@ void GraphicsRunner::init_vulkan()
     create_swap_chain();
     create_image_views();
     create_render_pass();
-    create_descriptor_set_layout();
+    create_global_descriptor_set_layout();
+    create_texture_descriptor_set_layout();
     create_graphics_pipeline();
     create_command_pools();
     create_color_resources();
     create_depth_resources();
     create_frame_buffers();
-    create_texture_image();
-    create_texture_image_view();
-    create_texture_sampler();
     create_uniform_buffers();
     create_descriptor_pool();
     create_descriptor_sets();
@@ -921,36 +974,47 @@ void GraphicsRunner::create_render_pass()
     }
 }
 
-void GraphicsRunner::create_descriptor_set_layout()
+// if an object has multiple transformations within it, descriptorCount 
+// should be more than one (i.e. a skeletal mesh could use one for each
+// bone)
+// the one use here means the whole object will transform
+void GraphicsRunner::create_global_descriptor_set_layout()
 {
     VkDescriptorSetLayoutBinding ubo_layout_binding{};
     ubo_layout_binding.binding = 0;
     ubo_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    // if an object has multiple transformations within it, this should
-    // be more than one (i.e. a skeletal mesh could use one for each
-    // bone)
-    // the one use here means the whole object will transform
     ubo_layout_binding.descriptorCount = 1;
     ubo_layout_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     ubo_layout_binding.pImmutableSamplers = nullptr;
 
+    VkDescriptorSetLayoutCreateInfo layout_create_info{};
+    layout_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layout_create_info.bindingCount = 1;
+    layout_create_info.pBindings = &ubo_layout_binding;
+    
+    if (vkCreateDescriptorSetLayout(device_, &layout_create_info, nullptr, &global_descriptor_set_layout_) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Error: unable to create global descriptor set layout");
+    }
+}
+
+void GraphicsRunner::create_texture_descriptor_set_layout()
+{
     VkDescriptorSetLayoutBinding sampler_layout_binding{};
-    sampler_layout_binding.binding = 1;
+    sampler_layout_binding.binding = 0; // One binding for the texture sampler.
     sampler_layout_binding.descriptorCount = 1;
     sampler_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     sampler_layout_binding.pImmutableSamplers = nullptr;
     sampler_layout_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-    std::array bindings = {ubo_layout_binding, sampler_layout_binding};
     
     VkDescriptorSetLayoutCreateInfo layout_create_info{};
     layout_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layout_create_info.bindingCount = static_cast<uint32_t>(bindings.size());
-    layout_create_info.pBindings = bindings.data();
+    layout_create_info.bindingCount = 1;
+    layout_create_info.pBindings = &sampler_layout_binding;
 
-    if (vkCreateDescriptorSetLayout(device_, &layout_create_info, nullptr, &descriptor_set_layout_) != VK_SUCCESS)
+    if (vkCreateDescriptorSetLayout(device_, &layout_create_info, nullptr, &texture_descriptor_set_layout_) != VK_SUCCESS)
     {
-        throw std::runtime_error("Error: unable to create descriptor set layout");
+        throw std::runtime_error("Error: unable to create texture descriptor set layout");
     }
 }
 
@@ -1059,20 +1123,25 @@ void GraphicsRunner::create_graphics_pipeline()
     color_blending.blendConstants[2] = 0.0f;
     color_blending.blendConstants[3] = 0.0f;
 
-    // Add a push constant range for the model matrix (per resource)
+    // Add a push constant range for the per-object model matrix.
     VkPushConstantRange pushConstantRange{};
     pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
     pushConstantRange.offset     = 0;
     pushConstantRange.size       = sizeof(glm::mat4);
 
-    VkPipelineLayoutCreateInfo pipeline_layout_create_info{};
-    pipeline_layout_create_info.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipeline_layout_create_info.setLayoutCount         = 1;
-    pipeline_layout_create_info.pSetLayouts            = &descriptor_set_layout_;
-    pipeline_layout_create_info.pushConstantRangeCount = 1;
-    pipeline_layout_create_info.pPushConstantRanges    = &pushConstantRange;
+    // Use two descriptor set layouts:
+    // Set 0: global UBO, Set 1: texture sampler.
+    std::array set_layouts = { global_descriptor_set_layout_, texture_descriptor_set_layout_ };
 
-    if (vkCreatePipelineLayout(device_, &pipeline_layout_create_info, nullptr, &pipeline_layout_) != VK_SUCCESS) {
+    VkPipelineLayoutCreateInfo pipeline_layout_create_info{};
+    pipeline_layout_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipeline_layout_create_info.setLayoutCount = static_cast<uint32_t>(set_layouts.size());
+    pipeline_layout_create_info.pSetLayouts = set_layouts.data();
+    pipeline_layout_create_info.pushConstantRangeCount = 1;
+    pipeline_layout_create_info.pPushConstantRanges = &pushConstantRange;
+
+    if (vkCreatePipelineLayout(device_, &pipeline_layout_create_info, nullptr, &pipeline_layout_) != VK_SUCCESS)
+    {
         throw std::runtime_error("Error: unable to create pipeline layout.");
     }
 
@@ -1101,7 +1170,8 @@ void GraphicsRunner::create_graphics_pipeline()
     pipeline_create_info.subpass             = 0;
     pipeline_create_info.basePipelineHandle  = VK_NULL_HANDLE;
 
-    if (vkCreateGraphicsPipelines(device_, VK_NULL_HANDLE, 1, &pipeline_create_info, nullptr, &graphics_pipeline_) != VK_SUCCESS) {
+    if (vkCreateGraphicsPipelines(device_, VK_NULL_HANDLE, 1, &pipeline_create_info, nullptr, &graphics_pipeline_) != VK_SUCCESS)
+    {
         throw std::runtime_error("Error: unable to create graphics pipeline");
     }
     
@@ -1381,14 +1451,14 @@ void GraphicsRunner::generate_mip_maps(VkImage image, VkFormat image_format, int
     end_single_time_commands(command_buffer);
 }
 
-void GraphicsRunner::create_texture_image()
+void GraphicsRunner::create_texture_image(const std::string &texture_path, RenderableResource& resource)
 {
     int texture_width, texture_height, texture_channels;
-    stbi_uc* pixels = stbi_load(texture_path_.c_str(), &texture_width, &texture_height, &texture_channels, STBI_rgb_alpha);
+    stbi_uc* pixels = stbi_load(texture_path.c_str(), &texture_width, &texture_height, &texture_channels, STBI_rgb_alpha);
 
-    mip_levels_ = static_cast<uint32_t>(std::floor(std::log2(std::max(texture_width, texture_height)))) + 1;
+    resource.mip_levels = static_cast<uint32_t>(std::floor(std::log2(std::max(texture_width, texture_height)))) + 1;
 
-    VkDeviceSize image_size = texture_width * texture_height * 4;
+    const VkDeviceSize image_size = static_cast<uint64_t>(texture_width) * static_cast<uint64_t>(texture_height) * 4l;
 
     if (!pixels)
     {
@@ -1416,27 +1486,27 @@ void GraphicsRunner::create_texture_image()
     create_image(
         texture_width,
         texture_height,
-        mip_levels_,
+        resource.mip_levels,
         VK_SAMPLE_COUNT_1_BIT,
         // TODO: Add VK_FORMAT_R8G8B8A8_SRGB Alternatives
         VK_FORMAT_R8G8B8A8_SRGB,
         VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, 
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        texture_image_, texture_image_memory_
+        resource.texture_image, resource.texture_image_memory
     );
 
     transition_image_layout(
-        texture_image_,
+        resource.texture_image,
         VK_FORMAT_R8G8B8A8_SRGB,
         VK_IMAGE_LAYOUT_UNDEFINED,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        mip_levels_
+        resource.mip_levels
     );
 
     copy_buffer_to_image(
         staging_buffer,
-        texture_image_,
+        resource.texture_image,
         static_cast<uint32_t>(texture_width),
         static_cast<uint32_t>(texture_height)
     );
@@ -1444,7 +1514,7 @@ void GraphicsRunner::create_texture_image()
     vkDestroyBuffer(device_, staging_buffer, nullptr);
     vkFreeMemory(device_, staging_buffer_memory, nullptr);
 
-    generate_mip_maps(texture_image_, VK_FORMAT_R8G8B8A8_SRGB, texture_width, texture_height, mip_levels_);
+    generate_mip_maps(resource.texture_image, VK_FORMAT_R8G8B8A8_SRGB, texture_width, texture_height, resource.mip_levels);
 }
 
 VkImageView GraphicsRunner::create_image_view(VkImage image, VkFormat format, VkImageAspectFlags aspect_flags, uint32_t mip_levels)
@@ -1468,12 +1538,12 @@ VkImageView GraphicsRunner::create_image_view(VkImage image, VkFormat format, Vk
     return image_view;
 }
 
-void GraphicsRunner::create_texture_image_view()
+void GraphicsRunner::create_texture_image_view(RenderableResource& resource)
 {
-    texture_image_view_ = create_image_view(texture_image_, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, mip_levels_);
+    resource.texture_image_view = create_image_view(resource.texture_image, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT, resource.mip_levels);
 }
 
-void GraphicsRunner::create_texture_sampler()
+void GraphicsRunner::create_texture_sampler(RenderableResource& resource)
 {
     VkSamplerCreateInfo sampler_create_info{};
     sampler_create_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -1501,9 +1571,9 @@ void GraphicsRunner::create_texture_sampler()
     sampler_create_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
     sampler_create_info.mipLodBias = 0.0f;
     sampler_create_info.minLod = 0.0f;
-    sampler_create_info.maxLod = static_cast<float>(mip_levels_);
+    sampler_create_info.maxLod = static_cast<float>(resource.mip_levels);
 
-    if (vkCreateSampler(device_, &sampler_create_info, nullptr, &texture_sampler_) != VK_SUCCESS)
+    if (vkCreateSampler(device_, &sampler_create_info, nullptr, &resource.texture_sampler) != VK_SUCCESS)
     {
         throw std::runtime_error("Error: unable to create texture sampler.");
     }
@@ -1735,13 +1805,14 @@ void GraphicsRunner::create_descriptor_pool()
     pool_sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     pool_sizes[0].descriptorCount = static_cast<uint32_t>(max_frames_in_flight_);
     pool_sizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    pool_sizes[1].descriptorCount = static_cast<uint32_t>(max_frames_in_flight_);
+    // Global sets + support for up to 100 texture sets.
+    pool_sizes[1].descriptorCount = static_cast<uint32_t>(max_frames_in_flight_ + 100);
 
     VkDescriptorPoolCreateInfo pool_create_info{};
     pool_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     pool_create_info.poolSizeCount = static_cast<uint32_t>(pool_sizes.size());
     pool_create_info.pPoolSizes = pool_sizes.data();
-    pool_create_info.maxSets = static_cast<uint32_t>(max_frames_in_flight_);
+    pool_create_info.maxSets = static_cast<uint32_t>(max_frames_in_flight_ + 100);
 
     if (vkCreateDescriptorPool(device_, &pool_create_info, nullptr, &descriptor_pool_) != VK_SUCCESS)
     {
@@ -1751,18 +1822,17 @@ void GraphicsRunner::create_descriptor_pool()
 
 void GraphicsRunner::create_descriptor_sets()
 {
-    std::vector layouts(max_frames_in_flight_, descriptor_set_layout_);
+    std::vector layouts(max_frames_in_flight_, global_descriptor_set_layout_);
 
-    VkDescriptorSetAllocateInfo descriptor_set_allocate_info{};
-    descriptor_set_allocate_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    descriptor_set_allocate_info.descriptorPool = descriptor_pool_;
-    descriptor_set_allocate_info.descriptorSetCount = static_cast<uint32_t>(max_frames_in_flight_);
-    descriptor_set_allocate_info.pSetLayouts = layouts.data();
+    VkDescriptorSetAllocateInfo alloc_info{};
+    alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    alloc_info.descriptorPool = descriptor_pool_;
+    alloc_info.descriptorSetCount = static_cast<uint32_t>(max_frames_in_flight_);
+    alloc_info.pSetLayouts = layouts.data();
 
     descriptor_sets_.resize(max_frames_in_flight_);
-    if (vkAllocateDescriptorSets(device_, &descriptor_set_allocate_info, descriptor_sets_.data()) != VK_SUCCESS)
-    {
-        throw std::runtime_error("Error: unable to allocate descriptor sets.");
+    if (vkAllocateDescriptorSets(device_, &alloc_info, descriptor_sets_.data()) != VK_SUCCESS) {
+        throw std::runtime_error("Error: unable to allocate global descriptor sets.");
     }
 
     for (size_t i = 0; i < max_frames_in_flight_; ++i)
@@ -1771,41 +1841,17 @@ void GraphicsRunner::create_descriptor_sets()
         buffer_info.buffer = uniform_buffers_[i];
         buffer_info.offset = 0;
         buffer_info.range = sizeof(UniformBufferObject);
-
-        VkDescriptorImageInfo image_info{};
-        image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        image_info.imageView = texture_image_view_;
-        image_info.sampler = texture_sampler_;
-
-        std::array<VkWriteDescriptorSet, 2> descriptor_writes{};
         
-        descriptor_writes[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptor_writes[0].dstSet = descriptor_sets_[i];
-        descriptor_writes[0].dstBinding = 0;
-        descriptor_writes[0].dstArrayElement = 0;
-        descriptor_writes[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptor_writes[0].descriptorCount = 1;
-        descriptor_writes[0].pBufferInfo = &buffer_info;
-        descriptor_writes[0].pImageInfo = nullptr;
-        descriptor_writes[0].pTexelBufferView = nullptr;
+        VkWriteDescriptorSet descriptor_write{};
+        descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptor_write.dstSet = descriptor_sets_[i];
+        descriptor_write.dstBinding = 0;
+        descriptor_write.dstArrayElement = 0;
+        descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptor_write.descriptorCount = 1;
+        descriptor_write.pBufferInfo = &buffer_info;
         
-        descriptor_writes[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptor_writes[1].dstSet = descriptor_sets_[i];
-        descriptor_writes[1].dstBinding = 1;
-        descriptor_writes[1].dstArrayElement = 0;
-        descriptor_writes[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        descriptor_writes[1].descriptorCount = 1;
-        descriptor_writes[1].pImageInfo = &image_info;
-        descriptor_writes[1].pBufferInfo = nullptr;
-        descriptor_writes[1].pTexelBufferView = nullptr;
-
-        vkUpdateDescriptorSets(
-            device_,
-            descriptor_writes.size(),
-            descriptor_writes.data(),
-            0,
-            nullptr
-        );
+        vkUpdateDescriptorSets(device_, 1, &descriptor_write, 0, nullptr);
     }
 }
 
@@ -1894,24 +1940,33 @@ void GraphicsRunner::record_command_buffer(VkCommandBuffer command_buffer, uint3
     viewport.height = static_cast<float>(swap_chain_extent_.height);
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
-
     vkCmdSetViewport(command_buffer, 0, 1, &viewport);
 
     VkRect2D scissor{};
     scissor.offset = {0, 0};
     scissor.extent = swap_chain_extent_;
-
     vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
-    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout_, 0, 1, &descriptor_sets_[current_frame_], 0, nullptr);
+    // Bind global descriptor set (set 0: camera UBO)
+    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                              pipeline_layout_, 0, 1, &descriptor_sets_[current_frame_], 0, nullptr);
 
-    for (const auto &resource : resources_ | std::views::values)
-    {
+    // For each resource, bind vertex/index buffers, bind its texture descriptor set (set 1),
+    // push its model matrix, and draw.
+    for (const auto &resource : resources_ | std::views::values) {
         const VkBuffer vertex_buffers[] = { resource.vertexBuffer };
         constexpr VkDeviceSize offsets[] = { 0 };
         vkCmdBindVertexBuffers(command_buffer, 0, 1, vertex_buffers, offsets);
         vkCmdBindIndexBuffer(command_buffer, resource.indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-        // Optionally, bind a descriptor set for the resource here if you add per-resource descriptors.
+        
+        // Bind resource’s texture descriptor set at set index 1.
+        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_layout_,
+                                  1, 1, &resource.texture_descriptor_set, 0, nullptr);
+        
+        // Push the per-resource model matrix via push constants.
+        vkCmdPushConstants(command_buffer, pipeline_layout_,
+                           VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(glm::mat4), &resource.model);
+        
         vkCmdDrawIndexed(command_buffer, static_cast<uint32_t>(resource.indices.size()), 1, 0, 0, 0);
     }
 
@@ -1998,7 +2053,11 @@ void GraphicsRunner::draw_frame()
 
 void GraphicsRunner::update_uniform_buffer()
 {
-    UniformBufferObject ubo = camera_->get_ubo();
+    const UniformBufferObject ubo = camera_->get_ubo();
+    // ubo.model = glm::mat4(0.f);// rotate(glm::mat4(1.0f), glm::radians(10.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    // ubo.view = lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+    // ubo.proj = glm::perspective(glm::radians(45.0f), static_cast<float>(swap_chain_extent_.width) / static_cast<float>(swap_chain_extent_.height), 0.1f, 10.0f);
+    // ubo.proj[1][1] *= -1;
 
     memcpy(uniform_buffers_mapped_[current_frame_], &ubo, sizeof(ubo));
 }
@@ -2010,14 +2069,6 @@ void GraphicsRunner::clean_up()
     
     clean_up_swap_chain();
 
-    vkDestroySampler(device_, texture_sampler_, nullptr);
-
-    vkDestroyImageView(device_, texture_image_view_, nullptr);
-
-    vkDestroyImage(device_, texture_image_, nullptr);
-
-    vkFreeMemory(device_, texture_image_memory_, nullptr);
-
     for (size_t i = 0; i < max_frames_in_flight_; ++i)
     {
         vkDestroyBuffer(device_, uniform_buffers_[i], nullptr);
@@ -2026,10 +2077,17 @@ void GraphicsRunner::clean_up()
 
     vkDestroyDescriptorPool(device_, descriptor_pool_, nullptr);
 
-    vkDestroyDescriptorSetLayout(device_, descriptor_set_layout_, nullptr);
+    vkDestroyDescriptorSetLayout(device_, global_descriptor_set_layout_, nullptr);
+
+    vkDestroyDescriptorSetLayout(device_, texture_descriptor_set_layout_, nullptr);
 
     for (const auto &resource : resources_ | std::views::values)
     {
+        vkDestroySampler(device_, resource.texture_sampler, nullptr);
+        vkDestroyImageView(device_, resource.texture_image_view, nullptr);
+        vkDestroyImage(device_, resource.texture_image, nullptr);
+        vkFreeMemory(device_, resource.texture_image_memory, nullptr);
+        
         vkDestroyBuffer(device_, resource.vertexBuffer, nullptr);
         vkFreeMemory(device_, resource.vertexBufferMemory, nullptr);
         vkDestroyBuffer(device_, resource.indexBuffer, nullptr);

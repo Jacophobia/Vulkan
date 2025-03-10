@@ -2,6 +2,7 @@
 #include <iostream>
 #include <chrono>
 #include <vector>
+#include <glm/ext/matrix_transform.hpp>
 
 #include "Graphics/GraphicsRunner.h"
 #include "Models/ModelLoading.h"
@@ -16,16 +17,17 @@ int main() {
         GraphicsRunner app(&camera);
         app.init();
 
-        std::vector<Vertex> vertices;
-        std::vector<uint32_t> indices;
         const std::string model_path = "Models/viking_room.obj";
-        model_loading::load_model(vertices, indices, model_path);
+        const std::string texture_path = "Textures/viking_room.png";
 
-        auto viking_room = app.register_resource({vertices, indices, {}});
+        uint32_t viking_room = app.register_resource({model_path, texture_path, glm::mat4(1.0f)});
         
         uint32_t frame_counter = 0;
         auto start_time = std::chrono::high_resolution_clock::now();
         auto prev_time = std::chrono::high_resolution_clock::now();
+
+        float angle = 0;
+        glm::vec3 position(0.f,0.f,0.f);
 
         while (!app.done())
         {
@@ -37,6 +39,13 @@ int main() {
             ++frame_counter;
             
             camera.move({0, 0.5f * delta_time, 0});
+
+            angle += 22.5f * delta_time;
+
+            position.x += 0.5f * delta_time;
+
+            app.update_resource(viking_room, rotate(glm::mat4(1.0f), glm::radians(angle), glm::vec3(0.0f, 0.0f, 1.0f)));
+            app.update_resource(viking_room, translate(glm::mat4(1.0f), position));
 
             prev_time = current_time;
         }

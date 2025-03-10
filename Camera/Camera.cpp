@@ -22,10 +22,8 @@ Camera::Camera(glm::vec3 start_pos, glm::vec3 up_vector, float start_yaw, float 
 // Returns a calculated UniformBufferObject based on the current camera state.
 UniformBufferObject Camera::get_ubo() const {
     UniformBufferObject ubo;
-    // Model is typically identity for a camera.
-    ubo.model = glm::mat4(1.0f);
+
     // The view matrix is calculated using the camera's position and front vector.
-    // if (true)
     if (!target_.has_value())
     {
         ubo.view = glm::lookAt(position_, position_ + front_, up_);

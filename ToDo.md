@@ -132,3 +132,11 @@ mipmap levels at runtime anyway. Usually they are pre-generated and
 stored in the texture file alongside the base level to improve loading 
 speed. Implementing resizing in software and loading multiple levels 
 from a file is left as an exercise to the reader.
+
+# For caching, try to use references
+
+The caches for models currently aren't considered a source of truth, so
+there are copies of them made every time. If they were the source of 
+truth, it would make it so multiple things could reference the same 
+resource instead of having a copy of vertexes and indices for every 
+object.
