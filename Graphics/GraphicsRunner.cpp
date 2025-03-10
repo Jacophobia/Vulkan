@@ -160,13 +160,11 @@ uint32_t GraphicsRunner::register_resource(const ResourceInfo &info)
     return resource.id;
 }
 
-void GraphicsRunner::update_resource(uint32_t resource_id, const glm::mat4 &new_ubo)
+void GraphicsRunner::update_resource(const uint32_t resource_id, const glm::mat4 &new_ubo)
 {
     if (resources_.contains(resource_id))
     {
         resources_[resource_id].model = new_ubo;
-        // If you decide later to store each resource's uniform data in a Vulkan buffer,
-        // you can update that buffer here.
     }
     else
     {
@@ -741,7 +739,8 @@ VkPresentModeKHR GraphicsRunner::select_swap_present_mode(const std::vector<VkPr
 {
     for (const auto& available_present_mode : available_present_modes)
     {
-        if (available_present_mode == VK_PRESENT_MODE_MAILBOX_KHR)
+        // TODO: switch to VK_PRESENT_MODE_MAILBOX_KHR if it gets more intensive to run. For now FIFO is good for not overworking the machine
+        if (available_present_mode == VK_PRESENT_MODE_FIFO_KHR)
         {
             return available_present_mode;
         }
@@ -2053,10 +2052,6 @@ void GraphicsRunner::draw_frame()
 void GraphicsRunner::update_uniform_buffer()
 {
     const UniformBufferObject ubo = camera_->get_ubo();
-    // ubo.model = glm::mat4(0.f);// rotate(glm::mat4(1.0f), glm::radians(10.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    // ubo.view = lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    // ubo.proj = glm::perspective(glm::radians(45.0f), static_cast<float>(swap_chain_extent_.width) / static_cast<float>(swap_chain_extent_.height), 0.1f, 10.0f);
-    // ubo.proj[1][1] *= -1;
 
     memcpy(uniform_buffers_mapped_[current_frame_], &ubo, sizeof(ubo));
 }
