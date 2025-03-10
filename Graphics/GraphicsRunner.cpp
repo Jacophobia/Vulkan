@@ -1,6 +1,7 @@
 ﻿// ReSharper disable CppMemberFunctionMayBeConst
 // ReSharper disable CppUseStructuredBinding
 // ReSharper disable CppTooWideScopeInitStatement
+#define VMA_IMPLEMENTATION
 
 #include "GraphicsRunner.h"
 
@@ -16,6 +17,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <unordered_map>
+#include <vk_mem_alloc.h>
 
 #include "../Logging/Logging.h"
 #include "../Rendering/UniformBufferObject.h"
@@ -51,7 +53,6 @@ uint32_t GraphicsRunner::register_resource(const ResourceInfo &info)
     // Load model (with caching)
     if (vertex_cache_.contains(info.model_path) && index_cache_.contains(info.model_path))
     {
-        // TODO: try to find a way to use references instead of copying every time
         resource.vertices = vertex_cache_[info.model_path];
         resource.indices = index_cache_[info.model_path];
     }
@@ -61,62 +62,68 @@ uint32_t GraphicsRunner::register_resource(const ResourceInfo &info)
         vertex_cache_[info.model_path] = resource.vertices;
         index_cache_[info.model_path] = resource.indices;
     }
-    
-    logging::info(std::format("Vertices' size: {}, Indices' size: {}", resource.vertices.size(), resource.indices.size()));
+
+    logging::info(std::format("Vertices' size: {}, Indices' size: {}",
+                               resource.vertices.size(), resource.indices.size()));
 
     assert(!resource.vertices.empty());
     assert(!resource.indices.empty());
 
-    // Create vertex buffer.
-    VkDeviceSize vertexBufferSize = sizeof(Vertex) * resource.vertices.size();
-    VkBuffer stagingVertexBuffer;
-    VkDeviceMemory stagingVertexBufferMemory;
-    create_buffer(vertexBufferSize,
+    // --- Create vertex buffer using a staging buffer with VMA ---
+    const VkDeviceSize vertex_buffer_size = sizeof(Vertex) * resource.vertices.size();
+
+    // Create staging buffer for vertices
+    VkBuffer staging_vertex_buffer;
+    VmaAllocation staging_vertex_allocation;
+    create_buffer(vertex_buffer_size,
                   VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                  stagingVertexBuffer,
-                  stagingVertexBufferMemory);
+                  staging_vertex_buffer,
+                  staging_vertex_allocation);
 
     void* data;
-    vkMapMemory(device_, stagingVertexBufferMemory, 0, vertexBufferSize, 0, &data);
-    memcpy(data, resource.vertices.data(), static_cast<size_t>(vertexBufferSize));
-    vkUnmapMemory(device_, stagingVertexBufferMemory);
+    vmaMapMemory(allocator_, staging_vertex_allocation, &data);
+    memcpy(data, resource.vertices.data(), static_cast<size_t>(vertex_buffer_size));
+    vmaUnmapMemory(allocator_, staging_vertex_allocation);
 
-    create_buffer(vertexBufferSize,
+    // Create the actual vertex buffer on GPU memory
+    create_buffer(vertex_buffer_size,
                   VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
                   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                   resource.vertexBuffer,
-                  resource.vertexBufferMemory);
+                  resource.vertexBufferAllocation);
 
-    copy_buffer(stagingVertexBuffer, resource.vertexBuffer, vertexBufferSize);
-    vkDestroyBuffer(device_, stagingVertexBuffer, nullptr);
-    vkFreeMemory(device_, stagingVertexBufferMemory, nullptr);
+    copy_buffer(staging_vertex_buffer, resource.vertexBuffer, vertex_buffer_size);
 
-    // Create index buffer.
-    VkDeviceSize indexBufferSize = sizeof(uint32_t) * resource.indices.size();
-    VkBuffer stagingIndexBuffer;
-    VkDeviceMemory stagingIndexBufferMemory;
-    create_buffer(indexBufferSize,
+    // Destroy the staging vertex buffer using VMA
+    vmaDestroyBuffer(allocator_, staging_vertex_buffer, staging_vertex_allocation);
+
+    // --- Create index buffer using a staging buffer with VMA ---
+    const VkDeviceSize index_buffer_size = sizeof(uint32_t) * resource.indices.size();
+
+    VkBuffer staging_index_buffer;
+    VmaAllocation staging_index_allocation;
+    create_buffer(index_buffer_size,
                   VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                  stagingIndexBuffer,
-                  stagingIndexBufferMemory);
+                  staging_index_buffer,
+                  staging_index_allocation);
 
-    vkMapMemory(device_, stagingIndexBufferMemory, 0, indexBufferSize, 0, &data);
-    memcpy(data, resource.indices.data(), static_cast<size_t>(indexBufferSize));
-    vkUnmapMemory(device_, stagingIndexBufferMemory);
+    vmaMapMemory(allocator_, staging_index_allocation, &data);
+    memcpy(data, resource.indices.data(), static_cast<size_t>(index_buffer_size));
+    vmaUnmapMemory(allocator_, staging_index_allocation);
 
-    create_buffer(indexBufferSize,
+    create_buffer(index_buffer_size,
                   VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
                   VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                   resource.indexBuffer,
-                  resource.indexBufferMemory);
+                  resource.indexBufferAllocation);
 
-    copy_buffer(stagingIndexBuffer, resource.indexBuffer, indexBufferSize);
-    vkDestroyBuffer(device_, stagingIndexBuffer, nullptr);
-    vkFreeMemory(device_, stagingIndexBufferMemory, nullptr);
+    copy_buffer(staging_index_buffer, resource.indexBuffer, index_buffer_size);
+    vmaDestroyBuffer(allocator_, staging_index_buffer, staging_index_allocation);
 
-    // Create texture image, image view, and sampler.
+    // --- Create texture image, image view, and sampler ---
+    // (Assuming create_texture_image has been updated to use VMA internally)
     create_texture_image(info.texture_path, resource);
     create_texture_image_view(resource);
     create_texture_sampler(resource);
@@ -173,13 +180,10 @@ void GraphicsRunner::unregister_resource(uint32_t resource_id)
     {
         vkDestroySampler(device_, resources_[resource_id].texture_sampler, nullptr);
         vkDestroyImageView(device_, resources_[resource_id].texture_image_view, nullptr);
-        vkDestroyImage(device_, resources_[resource_id].texture_image, nullptr);
-        vkFreeMemory(device_, resources_[resource_id].texture_image_memory, nullptr);
-        
-        vkDestroyBuffer(device_, resources_[resource_id].vertexBuffer, nullptr);
-        vkFreeMemory(device_, resources_[resource_id].vertexBufferMemory, nullptr);
-        vkDestroyBuffer(device_, resources_[resource_id].indexBuffer, nullptr);
-        vkFreeMemory(device_, resources_[resource_id].indexBufferMemory, nullptr);
+        vmaDestroyImage(allocator_, resources_[resource_id].texture_image, resources_[resource_id].textureImageAllocation);
+
+        vmaDestroyBuffer(allocator_, resources_[resource_id].vertexBuffer, resources_[resource_id].vertexBufferAllocation);
+        vmaDestroyBuffer(allocator_, resources_[resource_id].indexBuffer, resources_[resource_id].indexBufferAllocation);
         resources_.erase(resource_id);
     }
     else
@@ -224,6 +228,7 @@ void GraphicsRunner::init_vulkan()
     create_surface();
     select_physical_device();
     create_logical_device();
+    create_vma_allocator();
     create_swap_chain();
     create_image_views();
     create_render_pass();
@@ -691,6 +696,19 @@ void GraphicsRunner::create_logical_device()
 
     vkGetDeviceQueue(device_, indices.graphics_family.value(), 0, &graphics_queue_);
     vkGetDeviceQueue(device_, indices.present_family.value(), 0, &present_queue_);
+}
+
+void GraphicsRunner::create_vma_allocator()
+{
+    VmaAllocatorCreateInfo allocatorInfo = {};
+    allocatorInfo.physicalDevice = physical_device_;
+    allocatorInfo.device = device_;
+    allocatorInfo.instance = instance_;
+    allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_0;
+    if (vmaCreateAllocator(&allocatorInfo, &allocator_) != VK_SUCCESS)
+    {
+        throw std::runtime_error("Error: failed to create VMA allocator.");
+    }
 }
 
 void GraphicsRunner::create_surface()
@@ -1232,8 +1250,7 @@ void GraphicsRunner::create_color_resources()
 {
     VkFormat color_format = swap_chain_image_format_;
 
-    create_image(
-        swap_chain_extent_.width,
+    create_image(swap_chain_extent_.width,
         swap_chain_extent_.height,
         1,
         msaa_samples_,
@@ -1242,8 +1259,7 @@ void GraphicsRunner::create_color_resources()
         VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
         color_image_,
-        color_image_memory_
-    );
+        color_image_allocation_);
 
     color_image_view_ = create_image_view(color_image_, color_format, VK_IMAGE_ASPECT_COLOR_BIT, 1);
 }
@@ -1288,21 +1304,25 @@ void GraphicsRunner::create_depth_resources()
 {
     auto depth_format = find_depth_format();
 
-    create_image(
-        swap_chain_extent_.width,
+    create_image(swap_chain_extent_.width,
         swap_chain_extent_.height,
         1,
         msaa_samples_,
         depth_format,
         VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depth_image_, depth_image_memory_
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        depth_image_,
+        depth_image_allocation_
     );
 
     depth_image_view_ = create_image_view(depth_image_, depth_format, VK_IMAGE_ASPECT_DEPTH_BIT, 1);
 }
 
-void GraphicsRunner::create_image(uint32_t width, uint32_t height, uint32_t mip_levels, VkSampleCountFlagBits num_samples, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage&image, VkDeviceMemory&image_memory)
+void GraphicsRunner::create_image(uint32_t width, uint32_t height, uint32_t mip_levels,
+    VkSampleCountFlagBits num_samples, VkFormat format, VkImageTiling tiling,
+    VkImageUsageFlags usage, VkMemoryPropertyFlags properties,
+    VkImage &image, VmaAllocation &image_allocation)
 {
     VkImageCreateInfo image_create_info{};
     image_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -1319,25 +1339,21 @@ void GraphicsRunner::create_image(uint32_t width, uint32_t height, uint32_t mip_
     image_create_info.samples = num_samples;
     image_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    if (vkCreateImage(device_, &image_create_info, nullptr, &image) != VK_SUCCESS)
+    VmaAllocationCreateInfo allocInfo = {};
+    // Map properties to VMA usage; for images on GPU, typically GPU_ONLY.
+    if (properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
     {
-        throw std::runtime_error("Error: unable to create image.");
+        allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+    }
+    else
+    {
+        allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
     }
 
-    VkMemoryRequirements memory_requirements;
-    vkGetImageMemoryRequirements(device_, image, &memory_requirements);
-
-    VkMemoryAllocateInfo allocate_info{};
-    allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocate_info.allocationSize = memory_requirements.size;
-    allocate_info.memoryTypeIndex = find_memory_type(memory_requirements.memoryTypeBits, properties);
-
-    if (vkAllocateMemory(device_, &allocate_info, nullptr, &image_memory) != VK_SUCCESS)
+    if (vmaCreateImage(allocator_, &image_create_info, &allocInfo, &image, &image_allocation, nullptr) != VK_SUCCESS)
     {
-        throw std::runtime_error("Error: unable to allocate image memory.");
+        throw std::runtime_error("Error: unable to create image with VMA.");
     }
-
-    vkBindImageMemory(device_, image, image_memory, 0);
 }
 
 void GraphicsRunner::generate_mip_maps(VkImage image, VkFormat image_format, int32_t texture_width, int32_t texture_height, uint32_t mip_levels)
@@ -1466,35 +1482,25 @@ void GraphicsRunner::create_texture_image(const std::string &texture_path, Rende
     }
 
     VkBuffer staging_buffer;
-    VkDeviceMemory staging_buffer_memory;
-
-    create_buffer(
-        image_size,
+    VmaAllocation staging_buffer_allocation;
+    create_buffer(image_size,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         staging_buffer,
-        staging_buffer_memory
-    );
-
-    void* data;
-    vkMapMemory(device_, staging_buffer_memory, 0, image_size, 0, &data);
+        staging_buffer_allocation);void* data;
+    
+    vmaMapMemory(allocator_, staging_buffer_allocation, &data);
     memcpy(data, pixels, image_size);
-    vkUnmapMemory(device_, staging_buffer_memory);
+    vmaUnmapMemory(allocator_, staging_buffer_allocation);
 
     stbi_image_free(pixels);
 
-    create_image(
-        texture_width,
-        texture_height,
-        resource.mip_levels,
-        VK_SAMPLE_COUNT_1_BIT,
-        // TODO: Add VK_FORMAT_R8G8B8A8_SRGB Alternatives
-        VK_FORMAT_R8G8B8A8_SRGB,
+    create_image(texture_width, texture_height, resource.mip_levels,
+        VK_SAMPLE_COUNT_1_BIT, VK_FORMAT_R8G8B8A8_SRGB,
         VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, 
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-        resource.texture_image, resource.texture_image_memory
-    );
+        resource.texture_image, resource.textureImageAllocation);
 
     transition_image_layout(
         resource.texture_image,
@@ -1511,8 +1517,7 @@ void GraphicsRunner::create_texture_image(const std::string &texture_path, Rende
         static_cast<uint32_t>(texture_height)
     );
 
-    vkDestroyBuffer(device_, staging_buffer, nullptr);
-    vkFreeMemory(device_, staging_buffer_memory, nullptr);
+    vmaDestroyBuffer(allocator_, staging_buffer, staging_buffer_allocation);
 
     generate_mip_maps(resource.texture_image, VK_FORMAT_R8G8B8A8_SRGB, texture_width, texture_height, resource.mip_levels);
 }
@@ -1595,7 +1600,8 @@ uint32_t GraphicsRunner::find_memory_type(uint32_t type_filter, VkMemoryProperty
     throw std::runtime_error("Error: unable to find suitable memory type.");
 }
 
-void GraphicsRunner::create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& buffer_memory)
+void GraphicsRunner::create_buffer(VkDeviceSize size, VkBufferUsageFlags usage,
+    VkMemoryPropertyFlags properties, VkBuffer& buffer, VmaAllocation &buffer_allocation)
 {
     VkBufferCreateInfo buffer_create_info{};
     buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -1603,26 +1609,21 @@ void GraphicsRunner::create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, 
     buffer_create_info.usage = usage;
     buffer_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    if (vkCreateBuffer(device_, &buffer_create_info, nullptr, &buffer) != VK_SUCCESS)
+    VmaAllocationCreateInfo allocInfo = {};
+    // Simple mapping: if host-visible then use CPU_TO_GPU; otherwise, GPU_ONLY.
+    if (properties & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT)
     {
-        throw std::runtime_error("Error: unable to create vertex buffer.");
+        allocInfo.usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+    }
+    else
+    {
+        allocInfo.usage = VMA_MEMORY_USAGE_GPU_ONLY;
     }
 
-    VkMemoryRequirements memory_requirements;
-    vkGetBufferMemoryRequirements(device_, buffer, &memory_requirements);
-
-    VkMemoryAllocateInfo allocate_info{};
-    allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocate_info.allocationSize = memory_requirements.size;
-    allocate_info.memoryTypeIndex = find_memory_type(memory_requirements.memoryTypeBits, properties);
-    
-    // TODO: Custom Allocator
-    if (vkAllocateMemory(device_, &allocate_info, nullptr, &buffer_memory) != VK_SUCCESS)
+    if (vmaCreateBuffer(allocator_, &buffer_create_info, &allocInfo, &buffer, &buffer_allocation, nullptr) != VK_SUCCESS)
     {
-        throw std::runtime_error("Error: unable to allocate vertex buffer memory");
+        throw std::runtime_error("Error: unable to create buffer with VMA.");
     }
-
-    vkBindBufferMemory(device_, buffer, buffer_memory, 0);
 }
 
 void GraphicsRunner::transition_image_layout(VkImage image, VkFormat format, VkImageLayout old_layout, VkImageLayout new_layout, uint32_t mip_levels)
@@ -1782,20 +1783,18 @@ void GraphicsRunner::create_uniform_buffers()
     VkDeviceSize buffer_size = sizeof(UniformBufferObject);
 
     uniform_buffers_.resize(max_frames_in_flight_);
-    uniform_buffers_memories_.resize(max_frames_in_flight_);
+    uniform_buffers_allocations_.resize(max_frames_in_flight_);
     uniform_buffers_mapped_.resize(max_frames_in_flight_);
 
     for (size_t i = 0; i < max_frames_in_flight_; ++i)
     {
-        create_buffer(
-            buffer_size,
+        create_buffer(buffer_size,
             VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
             uniform_buffers_[i],
-            uniform_buffers_memories_[i]
-        );
+            uniform_buffers_allocations_[i]);
 
-        vkMapMemory(device_, uniform_buffers_memories_[i], 0, buffer_size, 0, &uniform_buffers_mapped_[i]);
+        vmaMapMemory(allocator_, uniform_buffers_allocations_[i], &uniform_buffers_mapped_[i]);
     }
 }
 
@@ -2071,8 +2070,8 @@ void GraphicsRunner::clean_up()
 
     for (size_t i = 0; i < max_frames_in_flight_; ++i)
     {
-        vkDestroyBuffer(device_, uniform_buffers_[i], nullptr);
-        vkFreeMemory(device_, uniform_buffers_memories_[i], nullptr);
+        vmaUnmapMemory(allocator_, uniform_buffers_allocations_[i]);
+        vmaDestroyBuffer(allocator_, uniform_buffers_[i], uniform_buffers_allocations_[i]);
     }
 
     vkDestroyDescriptorPool(device_, descriptor_pool_, nullptr);
@@ -2085,13 +2084,10 @@ void GraphicsRunner::clean_up()
     {
         vkDestroySampler(device_, resource.texture_sampler, nullptr);
         vkDestroyImageView(device_, resource.texture_image_view, nullptr);
-        vkDestroyImage(device_, resource.texture_image, nullptr);
-        vkFreeMemory(device_, resource.texture_image_memory, nullptr);
-        
-        vkDestroyBuffer(device_, resource.vertexBuffer, nullptr);
-        vkFreeMemory(device_, resource.vertexBufferMemory, nullptr);
-        vkDestroyBuffer(device_, resource.indexBuffer, nullptr);
-        vkFreeMemory(device_, resource.indexBufferMemory, nullptr);
+        vmaDestroyImage(allocator_, resource.texture_image, resource.textureImageAllocation);
+
+        vmaDestroyBuffer(allocator_, resource.vertexBuffer, resource.vertexBufferAllocation);
+        vmaDestroyBuffer(allocator_, resource.indexBuffer, resource.indexBufferAllocation);
     }
 
     resources_.clear();
@@ -2110,6 +2106,8 @@ void GraphicsRunner::clean_up()
     vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
 
     vkDestroyRenderPass(device_, render_pass_, nullptr);
+
+    vmaDestroyAllocator(allocator_);
     
     vkDestroyDevice(device_, nullptr);
     
@@ -2137,12 +2135,10 @@ bool GraphicsRunner::done()
 void GraphicsRunner::clean_up_swap_chain()
 {
     vkDestroyImageView(device_, color_image_view_, nullptr);
-    vkDestroyImage(device_, color_image_, nullptr);
-    vkFreeMemory(device_, color_image_memory_, nullptr);
-    
+    vmaDestroyImage(allocator_, color_image_, color_image_allocation_);
+
     vkDestroyImageView(device_, depth_image_view_, nullptr);
-    vkDestroyImage(device_, depth_image_, nullptr);
-    vkFreeMemory(device_, depth_image_memory_, nullptr);
+    vmaDestroyImage(allocator_, depth_image_, depth_image_allocation_);
     
     for (const auto framebuffer : swap_chain_framebuffers_)
     {

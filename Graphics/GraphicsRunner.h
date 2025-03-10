@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include <GLFW/glfw3.h>
+#include <vk_mem_alloc.h>
 
 #include "../Camera/Camera.h"
 #include "../Queue/QueueFamilyIndices.h"
@@ -71,6 +72,8 @@ private:
     GLFWwindow* window_;
     VkInstance instance_;
     VkDebugUtilsMessengerEXT debug_messenger_;
+
+    VmaAllocator allocator_;
     
     VkPhysicalDevice physical_device_ = VK_NULL_HANDLE; // implicitly destroyed
     VkDevice device_;
@@ -98,11 +101,9 @@ private:
     VkDescriptorPool descriptor_pool_;
     // implicitly destroyed when pool is destroyed
     std::vector<VkDescriptorSet> descriptor_sets_;
-    
-    // TODO: Combine Buffers 
 
     std::vector<VkBuffer> uniform_buffers_;
-    std::vector<VkDeviceMemory> uniform_buffers_memories_;
+    std::vector<VmaAllocation> uniform_buffers_allocations_;
     std::vector<void*> uniform_buffers_mapped_;
 
     // per-flight
@@ -112,11 +113,11 @@ private:
     std::vector<VkFence> in_flight_fences_;
 
     VkImage depth_image_;
-    VkDeviceMemory depth_image_memory_;
+    VmaAllocation depth_image_allocation_;
     VkImageView depth_image_view_;
 
     VkImage color_image_;
-    VkDeviceMemory color_image_memory_;
+    VmaAllocation color_image_allocation_;
     VkImageView color_image_view_;
 
     VkSampleCountFlagBits msaa_samples_ = VK_SAMPLE_COUNT_1_BIT;
@@ -130,13 +131,13 @@ private:
         std::vector<Vertex> vertices;
         std::vector<uint32_t> indices;
         VkBuffer vertexBuffer;
-        VkDeviceMemory vertexBufferMemory;
+        VmaAllocation vertexBufferAllocation;  // renamed & type changed
         VkBuffer indexBuffer;
-        VkDeviceMemory indexBufferMemory;
+        VmaAllocation indexBufferAllocation;     // renamed & type changed
         // texture
         uint32_t mip_levels;
         VkImage texture_image;
-        VkDeviceMemory texture_image_memory;
+        VmaAllocation textureImageAllocation;    // renamed & type changed
         VkImageView texture_image_view;
         VkSampler texture_sampler;
         VkDescriptorSet texture_descriptor_set;
@@ -152,7 +153,6 @@ private:
 
     static void frame_buffer_resize_callback(GLFWwindow* window, int width, int height);
     void init_window();
-
     /* Vulkan Initialization */
     void init_vulkan();
     void create_instance();
@@ -170,6 +170,8 @@ private:
 
     QueueFamilyIndices find_queue_families(VkPhysicalDevice device);
     void create_logical_device();
+
+    void create_vma_allocator();
 
     void create_surface();
 
@@ -206,7 +208,7 @@ private:
 
     void create_image(uint32_t width, uint32_t height, uint32_t mip_levels, VkSampleCountFlagBits num_samples, VkFormat format, VkImageTiling
                       tiling, VkImageUsageFlags
-                      usage, VkMemoryPropertyFlags properties, VkImage &image, VkDeviceMemory &image_memory);
+                      usage, VkMemoryPropertyFlags properties, VkImage &image, VmaAllocation &image_allocation);
     void generate_mip_maps(VkImage image, VkFormat image_format, int32_t texture_width,
                            int32_t texture_height, uint32_t mip_levels);
 
@@ -220,7 +222,8 @@ private:
 
     uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties);
 
-    void create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &buffer_memory);
+    void create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VmaAllocation
+                       &buffer_allocation);
     void transition_image_layout(VkImage image, VkFormat format, VkImageLayout old_layout,
                                  VkImageLayout new_layout, uint32_t mip_levels);
     void copy_buffer_to_image(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
