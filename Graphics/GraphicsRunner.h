@@ -28,6 +28,22 @@ public:
 
     bool done();
 
+    /* Registered Resources */
+    struct ResourceInfo {
+        std::vector<Vertex> vertices;
+        std::vector<uint32_t> indices;
+        UniformBufferObject ubo;
+    };
+
+    // Register a new renderable resource. Returns a unique identifier for the resource.
+    uint32_t register_resource(const ResourceInfo& info);
+
+    // Update the resource’s uniform (transformation) data.
+    void update_resource(uint32_t resource_id, const UniformBufferObject& new_ubo);
+
+    // Unregister (delete) a resource.
+    void unregister_resource(uint32_t resource_id);
+
 private:
     // constants
     const int width_ = 800;
@@ -35,8 +51,6 @@ private:
     const char* title_ = "Vulkan";
 
     const size_t max_frames_in_flight_ = 2;
-
-    const std::string model_path_ = "Models/viking_room.obj";
     const std::string texture_path_ = "Textures/viking_room.png";
     
     const std::vector<const char*> validation_layers_ =
@@ -83,15 +97,9 @@ private:
     VkCommandPool command_pool_;
     VkDescriptorPool descriptor_pool_;
     // implicitly destroyed when pool is destroyed
-    std::vector<VkDescriptorSet> descriptor_sets_; 
+    std::vector<VkDescriptorSet> descriptor_sets_;
     
-    std::vector<Vertex> vertices_;
-    std::vector<uint32_t> indices_;
     // TODO: Combine Buffers 
-    VkBuffer vertex_buffer_;
-    VkDeviceMemory vertex_buffer_memory_;
-    VkBuffer index_buffer_;
-    VkDeviceMemory index_buffer_memory_;
 
     std::vector<VkBuffer> uniform_buffers_;
     std::vector<VkDeviceMemory> uniform_buffers_memories_;
@@ -121,6 +129,21 @@ private:
 
     /* Externally Modified */
     Camera* camera_;
+
+    struct RenderableResource {
+        uint32_t id;
+        std::vector<Vertex> vertices;
+        std::vector<uint32_t> indices;
+        VkBuffer vertexBuffer;
+        VkDeviceMemory vertexBufferMemory;
+        VkBuffer indexBuffer;
+        VkDeviceMemory indexBufferMemory;
+        UniformBufferObject ubo;
+    };
+
+    // Container mapping resource IDs to their renderable data.
+    std::unordered_map<uint32_t, RenderableResource> resources_;
+    uint32_t nextResourceId_ = 1;
 
     static void frame_buffer_resize_callback(GLFWwindow* window, int width, int height);
     void init_window();
@@ -188,8 +211,6 @@ private:
 
     void create_texture_sampler();
 
-    void load_model();
-
     uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags properties);
 
     void create_buffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer &buffer, VkDeviceMemory &buffer_memory);
@@ -200,10 +221,6 @@ private:
     void end_single_time_commands(VkCommandBuffer command_buffer);
 
     void copy_buffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size);
-
-    void create_vertex_buffer();
-
-    void create_index_buffer();
 
     void create_uniform_buffers();
 
@@ -216,8 +233,6 @@ private:
     void create_sync_objects();
 
     void record_command_buffer(VkCommandBuffer command_buffer, uint32_t image_index);
-
-    void main_loop();
     
     void draw_frame();
     

@@ -25,13 +25,14 @@ UniformBufferObject Camera::get_ubo() const {
     // Model is typically identity for a camera.
     ubo.model = glm::mat4(1.0f);
     // The view matrix is calculated using the camera's position and front vector.
+    // if (true)
     if (!target_.has_value())
     {
         ubo.view = glm::lookAt(position_, position_ + front_, up_);
     }
     else
     {
-        ubo.view = glm::lookAt(position_, target_.value(), up_);
+        ubo.view = glm::lookAt(position_, target_.value()(), up_);
     }
     // The projection matrix uses a perspective projection.
     ubo.proj = glm::perspective(glm::radians(fov_), aspect_, near_plane_, far_plane_);
@@ -46,7 +47,6 @@ void Camera::set_position(const glm::vec3& new_position) {
 }
 
 void Camera::move(const glm::vec3& offset) {
-    logging::info(std::format("{},{},{}", position_.x, position_.y, position_.z));
     position_ += offset;
 }
 
@@ -117,7 +117,7 @@ void Camera::process_mouse_scroll(const float y_offset) {
     fov_ = std::clamp(fov_, 1.0f, 45.0f);
 }
 
-void Camera::set_target(glm::vec3 target)
+void Camera::set_target(std::function<glm::vec3()>& target)
 {
     target_ = target;
 }
@@ -137,10 +137,12 @@ void Camera::update_camera_vectors() {
     
     // Recalculate right and up vectors.
     right_ = glm::normalize(glm::cross(front_, world_up_));
-    up_    = glm::normalize(glm::cross(right_, front_));
+    up_    = {0,0,1};// glm::normalize(glm::cross(right_, front_)); // TODO: make the up logic more intelligent
 }
 
 // Clamp the pitch to avoid gimbal lock (flipping).
 void Camera::constrain_pitch() {
     pitch_ = std::clamp(pitch_, -89.0f, 89.0f);
 }
+
+

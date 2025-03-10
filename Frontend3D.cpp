@@ -1,39 +1,44 @@
 #include <exception>
 #include <iostream>
 #include <chrono>
+#include <vector>
 
 #include "Graphics/GraphicsRunner.h"
-#include "Logging/Logging.h"
+#include "Models/ModelLoading.h"
 
 int main() {
     try
     {
         Camera camera;
-        camera.move(glm::vec3(-1,-1,-2));
-        camera.set_target({0,0,0});
+        std::function get_target = []{ return glm::vec3(0,0,0); };
+        camera.set_target(get_target);
         
         GraphicsRunner app(&camera);
         app.init();
+
+        std::vector<Vertex> vertices;
+        std::vector<uint32_t> indices;
+        const std::string model_path = "Models/viking_room.obj";
+        model_loading::load_model(vertices, indices, model_path);
+
+        auto viking_room = app.register_resource({vertices, indices, {}});
         
         uint32_t frame_counter = 0;
         auto start_time = std::chrono::high_resolution_clock::now();
+        auto prev_time = std::chrono::high_resolution_clock::now();
 
         while (!app.done())
         {
+            auto current_time = std::chrono::high_resolution_clock::now();
+            auto delta_time = std::chrono::duration<float>(current_time - prev_time).count();
+            
             app.update();
     
             ++frame_counter;
+            
+            camera.move({0, 0.5f * delta_time, 0});
 
-            camera.set_position({frame_counter % 100000 / 1000.f, frame_counter % 100000 / 1000.f, frame_counter % 100000 / 1000.f});
-    
-            auto current_time = std::chrono::high_resolution_clock::now();
-            if (std::chrono::duration<float>(current_time - start_time).count() >= 1.0f)
-            {
-                logging::info(std::format("FPS: {}", frame_counter));
-        
-                start_time = std::chrono::high_resolution_clock::now();
-                frame_counter = 0;
-            }
+            prev_time = current_time;
         }
         
         app.clean_up();

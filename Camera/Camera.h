@@ -1,5 +1,7 @@
 ﻿#pragma once
 
+#include <functional>
+
 #include "../Rendering/UniformBufferObject.h"
 
 #include <string>
@@ -28,13 +30,13 @@ class Camera {
     float mouse_sensitivity_;
 
     // overrides
-    std::optional<glm::vec3> target_;
+    std::optional<std::function<glm::vec3()>> target_;
     
 public:
     // Constructor with sensible defaults.
     Camera(glm::vec3 start_pos = glm::vec3(0.0f, 0.0f, 3.0f),
-           glm::vec3 up_vector = glm::vec3(0.0f, 1.0f, 0.0f),
-           float start_yaw = -90.0f, float start_pitch = 0.0f,
+           glm::vec3 up_vector = glm::vec3(0.0f, 2.f, -50.0f),
+           float start_yaw = 0.f, float start_pitch = 0.f,
            float start_fov = 45.0f, float aspect_ratio = 4.0f / 3.0f,
            float near_p = 0.1f, float far_p = 100.0f);
     
@@ -72,7 +74,7 @@ public:
     void process_mouse_scroll(float y_offset);
 
     // set a target location to focus on
-    void set_target(glm::vec3 target);
+    void set_target(std::function<glm::vec3()>& target);
 
     // forget the target
     void reset_target();
