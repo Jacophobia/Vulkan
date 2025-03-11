@@ -115,9 +115,9 @@ void Camera::reset_target()
 // Recalculate the camera's direction vectors from the current Euler angles.
 void Camera::update_camera_vectors() {
     glm::vec3 f;
-    f.x = cos(glm::radians(yaw_)) * cos(glm::radians(pitch_));
-    f.y = sin(glm::radians(pitch_));
-    f.z = sin(glm::radians(yaw_)) * cos(glm::radians(pitch_));
+    f.x = sin(glm::radians(yaw_)) * cos(glm::radians(pitch_));
+    f.y = cos(glm::radians(yaw_)) * cos(glm::radians(pitch_));
+    f.z = sin(glm::radians(pitch_));
     front_ = glm::normalize(f);
     
     // Recalculate right and up vectors.
