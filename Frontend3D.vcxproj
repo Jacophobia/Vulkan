@@ -167,6 +167,9 @@
     <ClCompile Include="Camera\Camera.cpp" />
     <ClCompile Include="Frontend3D.cpp" />
     <ClCompile Include="Image\Image.cpp" />
+    <ClCompile Include="Input\Controller.cpp" />
+    <ClCompile Include="Input\Input.cpp" />
+    <ClCompile Include="Input\Keyboard.cpp" />
     <ClCompile Include="Logging\Logging.cpp" />
     <ClCompile Include="Models\ModelLoading.cpp" />
     <ClCompile Include="Queue\QueueFamilyIndices.cpp" />
@@ -175,10 +178,15 @@
     <ClCompile Include="SwapChain\SwapChain.cpp" />
     <ClCompile Include="SwapChain\SwapChainSupportDetails.cpp" />
     <ClCompile Include="Graphics\GraphicsRunner.cpp" />
+    <ClCompile Include="Tests\TestInput.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Camera\Camera.h" />
     <ClInclude Include="Image\Image.h" />
+    <ClInclude Include="Input\Controller.h" />
+    <ClInclude Include="Input\Controls.h" />
+    <ClInclude Include="Input\Input.h" />
+    <ClInclude Include="Input\Keyboard.h" />
     <ClInclude Include="Logging\Logging.h" />
     <ClInclude Include="Models\ModelLoading.h" />
     <ClInclude Include="Queue\QueueFamilyIndices.h" />
@@ -187,6 +195,7 @@
     <ClInclude Include="SwapChain\SwapChain.h" />
     <ClInclude Include="SwapChain\SwapChainSupportDetails.h" />
     <ClInclude Include="Graphics\GraphicsRunner.h" />
+    <ClInclude Include="Tests\TestInput.h" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="compile.bat" />

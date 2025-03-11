@@ -1,20 +1,14 @@
 ﻿#include "Camera.h"
 
-// #include <glm/ext/matrix_clip_space.hpp>
-
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include <string>
 #include <algorithm> // for std::clamp
-#include <format>
-
-#include "../Logging/Logging.h"
 
 Camera::Camera(glm::vec3 start_pos, glm::vec3 up_vector, float start_yaw, float start_pitch,
                float start_fov, float aspect_ratio, float near_p, float far_p)
     : position_(start_pos), world_up_(up_vector), yaw_(start_yaw), pitch_(start_pitch),
       fov_(start_fov), aspect_(aspect_ratio), near_plane_(near_p), far_plane_(far_p),
-      movement_speed_(2.5f), mouse_sensitivity_(0.1f)
+      movement_speed_(2.5f), sensitivity_(75.f)
 {
     update_camera_vectors();
 }
@@ -81,23 +75,16 @@ void Camera::set_clipping_planes(const float new_near, const float new_far) {
 }
 
 // Process keyboard input to move the camera.
-// "FORWARD", "BACKWARD", "LEFT", and "RIGHT" are supported.
-void Camera::process_keyboard(const std::string& direction, const float delta_time) {
+void Camera::travel(float x_offset, float y_offset, const float delta_time) {
     const float velocity = movement_speed_ * delta_time;
-    if (direction == "FORWARD")
-        position_ += front_ * velocity;
-    else if (direction == "BACKWARD")
-        position_ -= front_ * velocity;
-    else if (direction == "LEFT")
-        position_ -= right_ * velocity;
-    else if (direction == "RIGHT")
-        position_ += right_ * velocity;
+    position_ += front_ * velocity * y_offset;
+    position_ += right_ * velocity * x_offset;
 }
 
 // Process mouse movement input to adjust the camera's yaw and pitch.
-void Camera::process_mouse_movement(float x_offset, float y_offset, const bool should_constrain_pitch) {
-    x_offset *= mouse_sensitivity_;
-    y_offset *= mouse_sensitivity_;
+void Camera::look(float x_offset, float y_offset, const float delta_time, const bool should_constrain_pitch) {
+    x_offset *= sensitivity_ * delta_time;
+    y_offset *= sensitivity_ * delta_time;
     
     yaw_   += x_offset;
     pitch_ += y_offset;
@@ -135,7 +122,7 @@ void Camera::update_camera_vectors() {
     
     // Recalculate right and up vectors.
     right_ = glm::normalize(glm::cross(front_, world_up_));
-    up_    = {0,0,1};// glm::normalize(glm::cross(right_, front_)); // TODO: make the up logic more intelligent
+    up_    = glm::normalize(glm::cross(right_, front_));
 }
 
 // Clamp the pitch to avoid gimbal lock (flipping).

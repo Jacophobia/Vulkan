@@ -44,6 +44,9 @@ public:
 
     // Unregister (delete) a resource.
     void unregister_resource(uint32_t resource_id);
+    
+    
+    GLFWwindow* window_;
 
 private:
     // constants
@@ -69,7 +72,6 @@ private:
     
     uint32_t current_frame_ = 0;
     
-    GLFWwindow* window_;
     VkInstance instance_;
     VkDebugUtilsMessengerEXT debug_messenger_;
 

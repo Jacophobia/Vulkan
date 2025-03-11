@@ -4,7 +4,6 @@
 
 #include "../Rendering/UniformBufferObject.h"
 
-#include <string>
 #include <optional>
 
 class Camera {
@@ -27,7 +26,7 @@ class Camera {
     
     // Movement options
     float movement_speed_;
-    float mouse_sensitivity_;
+    float sensitivity_;
 
     // overrides
     std::optional<std::function<glm::vec3()>> target_;
@@ -35,7 +34,7 @@ class Camera {
 public:
     // Constructor with sensible defaults.
     Camera(glm::vec3 start_pos = glm::vec3(0.0f, 0.0f, 3.0f),
-           glm::vec3 up_vector = glm::vec3(0.0f, 2.f, -50.0f),
+           glm::vec3 up_vector = glm::vec3(0.0f, 1.0f, 0.0f),
            float start_yaw = 0.f, float start_pitch = 0.f,
            float start_fov = 45.0f, float aspect_ratio = 4.0f / 3.0f,
            float near_p = 0.1f, float far_p = 100.0f);
@@ -65,10 +64,10 @@ public:
     
     // Process keyboard input to move the camera.
     // "FORWARD", "BACKWARD", "LEFT", and "RIGHT" are supported.
-    void process_keyboard(const std::string& direction, float delta_time);
+    void travel(float x_offset, float y_offset, float delta_time);
     
     // Process mouse movement input to adjust the camera's yaw and pitch.
-    void process_mouse_movement(float x_offset, float y_offset, bool should_constrain_pitch = true);
+    void look(float x_offset, float y_offset, float delta_time, bool should_constrain_pitch = true);
     
     // Process mouse scroll input to change the FOV.
     void process_mouse_scroll(float y_offset);

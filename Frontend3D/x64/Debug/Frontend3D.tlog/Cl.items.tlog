@@ -1,6 +1,9 @@
 C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Camera\Camera.cpp;C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Frontend3D\x64\Debug\Camera.obj
 C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Frontend3D.cpp;C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Frontend3D\x64\Debug\Frontend3D.obj
 C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Image\Image.cpp;C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Frontend3D\x64\Debug\Image.obj
+C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Input\Controller.cpp;C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Frontend3D\x64\Debug\Controller.obj
+C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Input\Input.cpp;C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Frontend3D\x64\Debug\Input.obj
+C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Input\Keyboard.cpp;C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Frontend3D\x64\Debug\Keyboard.obj
 C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Logging\Logging.cpp;C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Frontend3D\x64\Debug\Logging.obj
 C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Models\ModelLoading.cpp;C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Frontend3D\x64\Debug\ModelLoading.obj
 C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Queue\QueueFamilyIndices.cpp;C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Frontend3D\x64\Debug\QueueFamilyIndices.obj
@@ -9,3 +12,4 @@ C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Rendering\Vertex.cp
 C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\SwapChain\SwapChain.cpp;C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Frontend3D\x64\Debug\SwapChain.obj
 C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\SwapChain\SwapChainSupportDetails.cpp;C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Frontend3D\x64\Debug\SwapChainSupportDetails.obj
 C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Graphics\GraphicsRunner.cpp;C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Frontend3D\x64\Debug\GraphicsRunner.obj
+C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Tests\TestInput.cpp;C:\Users\Jacob\Documents\Documents\prj\RogueChess\Frontend3D\Frontend3D\x64\Debug\TestInput.obj
