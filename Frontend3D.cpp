@@ -8,6 +8,28 @@
 #include "Input/Input.h"
 #include "Tests/TestInput.h"
 
+#include <Jolt/Jolt.h>
+#include <Jolt/Core/JobSystemThreadPool.h>
+#include <Jolt/RegisterTypes.h>
+#include <Jolt/Physics/PhysicsSystem.h>
+#include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Physics/Body/BodyCreationSettings.h>
+
+void initialize_physics()
+{
+    // Initialize Jolt Physics once at startup
+    JPH::RegisterDefaultAllocator();
+
+    JPH::Factory::sInstance = new JPH::Factory();
+
+    // Initialize Jolt Physics types
+    JPH::RegisterTypes();
+
+    // Job System for parallel execution (optional but recommended)
+    JPH::JobSystemThreadPool job_system(JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, std::thread::hardware_concurrency());
+}
+
 void initialize_inputs(Input& input)
 {
     input.create(true);
