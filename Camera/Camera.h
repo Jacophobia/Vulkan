@@ -33,11 +33,11 @@ class Camera {
     
 public:
     // Constructor with sensible defaults.
-    Camera(glm::vec3 start_pos = glm::vec3(0.0f, 0.0f, 3.0f),
+    Camera(glm::vec3 start_pos = glm::vec3(0.0f, 0.0f, 0.0f),
            glm::vec3 up_vector = glm::vec3(0.0f, 0.0f, 1.0f),
            float start_yaw = 0.f, float start_pitch = 0.f,
            float start_fov = 45.0f, float aspect_ratio = 4.0f / 3.0f,
-           float near_p = 0.1f, float far_p = 100.0f);
+           float near_p = 0.1f, float far_p = 10000.0f);
     
     // Returns a calculated UniformBufferObject based on the current camera state.
     [[nodiscard]] UniformBufferObject get_ubo() const;
@@ -64,8 +64,8 @@ public:
     
     // Process keyboard input to move the camera.
     // "FORWARD", "BACKWARD", "LEFT", and "RIGHT" are supported.
-    void travel(float x_offset, float y_offset, float delta_time);
-    
+    void travel(float x_offset, float y_offset, float z_offset, float delta_time);
+
     // Process mouse movement input to adjust the camera's yaw and pitch.
     void look(float x_offset, float y_offset, float delta_time, bool should_constrain_pitch = true);
     

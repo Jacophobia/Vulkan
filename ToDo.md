@@ -1,4 +1,9 @@
-﻿# Combine Buffers
+﻿# Make Objects Darker As They Get Further Away
+
+Since the game takes place in space, objects should be harder to see the
+further they get from the player. 
+
+# Combine Buffers
 
 * [Vulkan Tutorial](https://vulkan-tutorial.com/en/Vertex_buffers/Index_buffer)
 

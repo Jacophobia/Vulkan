@@ -3,32 +3,10 @@
 #include <chrono>
 #include <glm/ext/matrix_transform.hpp>
 
+#include "Actors/Actor.h"
 #include "Graphics/GraphicsRunner.h"
 #include "Models/ModelLoading.h"
 #include "Input/Input.h"
-#include "Tests/TestInput.h"
-
-#include <Jolt/Jolt.h>
-#include <Jolt/Core/JobSystemThreadPool.h>
-#include <Jolt/RegisterTypes.h>
-#include <Jolt/Physics/PhysicsSystem.h>
-#include <Jolt/Physics/Body/BodyCreationSettings.h>
-#include <Jolt/Physics/Collision/Shape/SphereShape.h>
-#include <Jolt/Physics/Body/BodyCreationSettings.h>
-
-void initialize_physics()
-{
-    // Initialize Jolt Physics once at startup
-    JPH::RegisterDefaultAllocator();
-
-    JPH::Factory::sInstance = new JPH::Factory();
-
-    // Initialize Jolt Physics types
-    JPH::RegisterTypes();
-
-    // Job System for parallel execution (optional but recommended)
-    JPH::JobSystemThreadPool job_system(JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, std::thread::hardware_concurrency());
-}
 
 void initialize_inputs(Input& input)
 {
@@ -133,26 +111,32 @@ int main() {
         // return 0; 
         
         Camera camera;
-        camera.move({0,0,1});
+        camera.move({0,0,0});
         
         GraphicsRunner app(&camera);
         app.init();
 
-        const std::string model_path = "Models/viking_room.obj";
-        const std::string texture_path = "Textures/viking_room.png";
+        const std::string sphere_model_path = "Models/sphere.obj";
+        const std::string sphere_texture_path = "Textures/grid.jpg";
+        
+        const std::string cube_model_path = "Models/cube.obj";
+        const std::string cube_texture_path = "Textures/grid.jpg";
 
-        uint32_t viking_room_1 = app.register_resource({model_path, texture_path, glm::mat4(1.0f)});
-        uint32_t viking_room_2 = app.register_resource({model_path, texture_path, glm::mat4(1.0f)});
+        glm::vec3 world_up(0.f, 0.f, 1.f);
+        
+        uint32_t earth_id = app.register_resource({sphere_model_path, sphere_texture_path, glm::mat4(1.0f)});
+        uint32_t cube_id = app.register_resource({cube_model_path, cube_texture_path, glm::mat4(1.0f)});
+        uint32_t moon_id = app.register_resource({sphere_model_path, sphere_texture_path, glm::mat4(1.f)});
+        Actor cube(glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.001f, 0.001f, 0.001f), world_up, 0.f, 0.f, 0.f);
+        Actor earth({0.f, 384399.f / 2.f, 0.f}, {6378.f, 6378.f, 6378.f}, world_up, 0.f, 0.f, 0.f);
+        Actor moon({0.f, -384399.f / 2.f, 0.f}, {1738.f, 1738.f, 1738.f}, world_up, 0.f, 0.f, 0.f);
         
         uint32_t frame_counter = 0;
         auto start_time = std::chrono::high_resolution_clock::now();
         auto prev_time = std::chrono::high_resolution_clock::now();
-
-        float angle = 0;
-        glm::vec3 position(0.f,0.f,0.f);
         
         // std::function get_target = [&position]{ return position; };
-        // // std::function get_target = []{ return glm::vec3(0,0,0); };
+        // std::function get_target = []{ return glm::vec3(0,0,0); };
         // camera.set_target(get_target);
         
         Input input;
@@ -168,14 +152,14 @@ int main() {
     
             ++frame_counter;
 
-            debug_controller_inputs(input);
+            // debug_controller_inputs(input);
 
             if (input.get_control_state(controls::MOVE_RIGHT) != 0.f || input.get_control_state(controls::MOVE_UP) != 0.f)
             {
                 float x = input.get_control_state(controls::MOVE_RIGHT);
                 float y = input.get_control_state(controls::MOVE_UP) * -1;
                 
-                camera.travel(x, y, delta_time);
+                camera.travel(x, y, 0.f, delta_time);
             }
             if (input.get_control_state(controls::LOOK_RIGHT) != 0.f || input.get_control_state(controls::LOOK_UP) != 0.f)
             {
@@ -184,24 +168,29 @@ int main() {
                 
                 camera.look(x, y, delta_time);
             }
+            if (input.get_control_state(controls::ABILITY_ONE) != 0.f)
+            {
+                camera.travel(0.f, 0.f, -input.get_control_state(controls::ABILITY_ONE), delta_time);
+            }
+            if (input.get_control_state(controls::ABILITY_TWO) != 0.f)
+            {
+                camera.travel(0.f, 0.f, input.get_control_state(controls::ABILITY_TWO), delta_time);
+            }
+
+            // cube.move(glm::vec3(-0.5f * delta_time, 0.5f * delta_time, 0));
+            cube.roll(10.f * delta_time);
+            cube.pitch(-15.f * delta_time);
+            cube.yaw(1.f * delta_time);
+
+            earth.roll(1.f * delta_time);
+            earth.pitch(1.f * delta_time);
+            earth.pitch(1.f * delta_time);
+            // earth.move({0.f, -1.f, 0.f});
             
-            // camera.move({0, 0, 0.75f * delta_time});
+            app.update_resource(earth_id, earth.get_transform());
 
-            angle += 90.f * delta_time;
-
-            position.x += 0.5f * delta_time;
-
-            glm::mat4 matrix_1(1.0f);
-            // matrix_1 = translate(matrix_1, position);
-            // matrix_1 = rotate(matrix_1, glm::radians(angle), glm::vec3(0.0f, 0.0f, 1.0f));
-            
-            app.update_resource(viking_room_1, matrix_1);
-
-            glm::mat4 matrix_2(1.0f);
-            matrix_2 = rotate(matrix_2, glm::radians(angle), glm::vec3(0.0f, 0.0f, 1.0f));
-            matrix_2 = translate(matrix_2, position);
-            
-            app.update_resource(viking_room_2, matrix_2);
+            app.update_resource(cube_id, cube.get_transform());
+            app.update_resource(moon_id, moon.get_transform());
 
             prev_time = current_time;
         }
